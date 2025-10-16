@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Word Space</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { background: #000; overflow: hidden; }
+        
+        iframe {
+            position: absolute;
+            width: 100vw;
+            height: 100vh;
+            border: none;
+        }
+        
+        /* This CSS injects into the iframe to hide TensorBoard UI */
+        #tensorboard-frame::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <iframe 
+        id="tensorboard-frame"
+        src="http://localhost:6006/#projector"
+        sandbox="allow-scripts allow-same-origin">
+    </iframe>
+    
+    <script>
+        // Wait for iframe to load, then inject CSS to hide UI elements
+        const iframe = document.getElementById('tensorboard-frame');
+        
+        iframe.onload = function() {
+            try {
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                
+                // Inject style to hide TensorBoard UI
+                const style = iframeDoc.createElement('style');
+                style.innerHTML = `
+                    /* Hide TensorBoard header */
+                    tf-tensorboard { --paper-toolbar-height: 0px !important; }
+                    .toolbar { display: none !important; }
+                    header { display: none !important; }
+                    
+                    /* Hide left sidebar */
+                    .sidebar { display: none !important; }
+                    .projector-sidebar { display: none !important; }
+                    
+                    /* Hide right inspector */
+                    .inspector-panel { display: none !important; }
+                    
+                    /* Make canvas full screen */
+                    .main { 
+                        margin: 0 !important; 
+                        padding: 0 !important;
+                        width: 100vw !important;
+                        height: 100vh !important;
+                    }
+                    
+                    canvas { 
+                        width: 100vw !important; 
+                        height: 100vh !important; 
+                    }
+                `;
+                
+                iframeDoc.head.appendChild(style);
+            } catch (e) {
+                console.log('Could not access iframe (CORS). Run TensorBoard with --host 0.0.0.0');
+            }
+        };
+        
+        // Hide cursor after inactivity
+        let cursorTimeout;
+        document.addEventListener('mousemove', () => {
+            document.body.style.cursor = 'default';
+            clearTimeout(cursorTimeout);
+            cursorTimeout = setTimeout(() => {
+                document.body.style.cursor = 'none';
+            }, 3000);
+        });
+    </script>
+</body>
+</html>
