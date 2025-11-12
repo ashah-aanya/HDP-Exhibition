@@ -36,6 +36,17 @@
         let targetPositions = [];
         let velocities = [];
 
+        // Dynamic viewpoint state
+        let cameraState = {
+            focusIndex: 0,           // Current dot to focus on
+            nextFocusIndex: 0,       // Next dot to transition to
+            focusPosition: [0, 0, 0], // Smoothly interpolated focus position
+            cameraDistance: 15,      // Larger initial distance to use full landscape
+            targetDistance: 15,      // Smooth camera movement
+            lastFocusTime: 0,        // Track when we last changed focus
+            focusTransitionDuration: 10000  // ms between focus changes (10 seconds)
+        };
+
         // Initialize Three.js scene
         function initScene() {
             scene = new THREE.Scene();
@@ -121,7 +132,7 @@
             const texture = new THREE.CanvasTexture(canvas);
 
             const material = new THREE.PointsMaterial({
-                size: 0.15,  // Small dots
+                size: 0.1,  // Smaller dots
                 vertexColors: true,
                 transparent: true,
                 opacity: 1.0,
@@ -154,15 +165,130 @@
             points.geometry.attributes.position.needsUpdate = true;
         }
 
+        // Calculate neighborhood density around a point
+        function calculateDensity(pointIndex, radius = 2.0) {
+            if (currentPositions.length === 0) return 0;
+            const point = currentPositions[pointIndex];
+            let neighborCount = 0;
+
+            for (let i = 0; i < currentPositions.length; i++) {
+                if (i === pointIndex) continue;
+                const neighbor = currentPositions[i];
+                const dx = neighbor[0] - point[0];
+                const dy = neighbor[1] - point[1];
+                const dz = neighbor[2] - point[2];
+                const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+                if (distance < radius) {
+                    neighborCount++;
+                }
+            }
+            return neighborCount;
+        }
+
+        // Find the densest cluster region
+        function findDensestPoint() {
+            if (currentPositions.length === 0) return 0;
+            let maxDensity = 0;
+            let densestIndex = 0;
+
+            for (let i = 0; i < currentPositions.length; i++) {
+                const density = calculateDensity(i);
+                if (density > maxDensity) {
+                    maxDensity = density;
+                    densestIndex = i;
+                }
+            }
+            return densestIndex;
+        }
+
+        // Find adjacent cluster in the neighborhood
+        function findAdjacentCluster(currentIndex, radius = 3.0) {
+            const point = currentPositions[currentIndex];
+            let bestIndex = currentIndex;
+            let bestScore = -1;
+
+            // Look for a neighbor that has good density and is different from current
+            for (let i = 0; i < currentPositions.length; i++) {
+                if (i === currentIndex) continue;
+                const neighbor = currentPositions[i];
+                const dx = neighbor[0] - point[0];
+                const dy = neighbor[1] - point[1];
+                const dz = neighbor[2] - point[2];
+                const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+                if (distance < radius) {
+                    const density = calculateDensity(i);
+                    // Prefer neighbors with good density and moderate distance
+                    const score = density - (distance * 0.5);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestIndex = i;
+                    }
+                }
+            }
+            return bestIndex;
+        }
+
+        // Update camera to focus on dynamic viewpoint
+        function updateDynamicCamera() {
+            if (currentPositions.length === 0) return;
+
+            // Periodically find new focus point
+            const now = Date.now();
+            if (now - cameraState.lastFocusTime > cameraState.focusTransitionDuration) {
+                cameraState.focusIndex = cameraState.nextFocusIndex;
+                cameraState.nextFocusIndex = findAdjacentCluster(cameraState.focusIndex);
+                cameraState.lastFocusTime = now;
+            }
+
+            const currentFocusPoint = currentPositions[cameraState.focusIndex];
+            const nextFocusPoint = currentPositions[cameraState.nextFocusIndex];
+
+            // Smoothly interpolate focus position between current and next focus
+            // Transition over the entire duration for smooth movement
+            const timeSinceFocus = now - cameraState.lastFocusTime;
+            const transitionProgress = Math.min(timeSinceFocus / cameraState.focusTransitionDuration, 1.0);
+
+            // Ease-out cubic for smooth deceleration
+            const easeProgress = 1 - Math.pow(1 - transitionProgress, 3);
+
+            for (let i = 0; i < 3; i++) {
+                cameraState.focusPosition[i] =
+                    currentFocusPoint[i] + (nextFocusPoint[i] - currentFocusPoint[i]) * easeProgress;
+            }
+
+            // Calculate density at current focus to determine zoom
+            const density = calculateDensity(cameraState.focusIndex, 2.5);
+            const maxDensity = currentPositions.length * 0.3;
+
+            // Higher density = closer zoom (smaller distance)
+            // Distance ranges from 6 (very dense) to 20 (sparse) for landscape viewing
+            cameraState.targetDistance = 20 - (Math.min(density, maxDensity) / maxDensity) * 14;
+
+            // Smoothly interpolate camera distance
+            cameraState.cameraDistance += (cameraState.targetDistance - cameraState.cameraDistance) * 0.02;
+
+            // Create very subtle camera orbit around focus point
+            const orbitRadius = cameraState.cameraDistance;
+            const time = now / 1000;
+            const angle = (time * 0.02) % (Math.PI * 2); // Extremely slow rotation (0.02 rad/s)
+
+            // Position camera in subtle orbit around smoothly interpolated focus point
+            camera.position.x = cameraState.focusPosition[0] + Math.cos(angle) * orbitRadius * 0.3;
+            camera.position.y = cameraState.focusPosition[1] + Math.sin(angle) * (orbitRadius * 0.15);
+            camera.position.z = cameraState.focusPosition[2] + Math.sin(angle) * orbitRadius * 0.3 + orbitRadius;
+
+            // Always look at the smoothly interpolated focus point
+            camera.lookAt(cameraState.focusPosition[0], cameraState.focusPosition[1], cameraState.focusPosition[2]);
+        }
+
         // Animation loop
         function animate() {
             requestAnimationFrame(animate);
 
             updatePositions();
-
-            // FIXED CAMERA - no orbit movement
-            camera.position.set(0, 0, 12);
-            camera.lookAt(0, 0, 0);
+            updateDynamicCamera();
 
             renderer.render(scene, camera);
         }

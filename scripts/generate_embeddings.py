@@ -17,19 +17,17 @@ def load_text(filepath):
         return f.read()
 
 def extract_words(text, min_length=2):
-    """Extract words from text"""
+    """Extract words from text, keeping duplicates"""
     words = text.lower().split()
-    
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_words = []
+
+    # Keep all words including duplicates, just clean them up
+    cleaned_words = []
     for word in words:
         word = word.strip('.,!?;:"()[]{}')
-        if len(word) >= min_length and word not in seen:
-            seen.add(word)
-            unique_words.append(word)
-    
-    return unique_words
+        if len(word) >= min_length:
+            cleaned_words.append(word)
+
+    return cleaned_words
 
 def create_embeddings(words):
     """Generate embeddings using sentence transformers"""

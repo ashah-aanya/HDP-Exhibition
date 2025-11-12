@@ -51,7 +51,7 @@ def initialize_tsne(initial_embeddings, perplexity=25):
     tsne = TSNE(
         n_components=3,
         perplexity=perplexity,
-        learning_rate=3000,      # Ultra-high learning rate for aggressive clustering
+        learning_rate=1500,      # Very high learning rate for dramatic clustering movement
         random_state=42,
         n_jobs=1,
         verbose=False,
@@ -177,8 +177,8 @@ async def animation_loop():
     while is_animating:
         try:
             if len(words) >= 2 and embedding_obj is not None:
-                # Optimize t-SNE with moderate iterations for continuous smooth updates
-                embedding_obj = embedding_obj.optimize(n_iter=10, momentum=0.95)
+                # Optimize t-SNE with more iterations for dramatic clustering
+                embedding_obj = embedding_obj.optimize(n_iter=15, momentum=0.95)
 
                 # Get updated positions
                 positions = embedding_obj[:].copy()
