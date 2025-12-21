@@ -76,9 +76,41 @@
             pointLight.position.set(5, 5, 5);
             scene.add(pointLight);
 
+            // Add coordinate axes
+            addAxes();
+
             window.addEventListener('resize', onResize);
 
             animate();
+        }
+
+        // Add 3D coordinate axes
+        function addAxes() {
+            const axisLength = 2;
+            const axisRadius = 0.02;  // Thickness of the axis cylinders
+
+            const material = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.75
+            });
+
+            // X axis - White cylinder
+            const xGeometry = new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength * 2, 8);
+            const xAxis = new THREE.Mesh(xGeometry, material);
+            xAxis.rotation.z = Math.PI / 2;  // Rotate to align with X axis
+            scene.add(xAxis);
+
+            // Y axis - White cylinder
+            const yGeometry = new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength * 2, 8);
+            const yAxis = new THREE.Mesh(yGeometry, material);
+            scene.add(yAxis);
+
+            // Z axis - White cylinder
+            const zGeometry = new THREE.CylinderGeometry(axisRadius, axisRadius, axisLength * 2, 8);
+            const zAxis = new THREE.Mesh(zGeometry, material);
+            zAxis.rotation.x = Math.PI / 2;  // Rotate to align with Z axis
+            scene.add(zAxis);
         }
 
         // Create or update point cloud
