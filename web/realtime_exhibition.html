@@ -422,33 +422,41 @@
                 // Track which word strings we've already labeled (case-insensitive)
                 const seen = new Set();
 
-                // Helper to add a label only if its word hasn't been shown yet
-                function addLabel(idx, color) {
+                function addLabel(idx, color, yOffset = 0.25) {
                 if (!currentPositions[idx]) return;
 
                 const w = (words[idx]?.word || "").trim();
                 if (!w) return;
 
                 const key = w.toLowerCase();
-                if (seen.has(key)) return;      // ✅ skip duplicates
+                if (seen.has(key)) return;   // ✅ skip duplicates
                 seen.add(key);
 
                 const sprite = makeTextSprite(w, color);
+
+                // ✅ store anchor so it can follow the dot as it moves
+                sprite.userData.pointIndex = idx;
+                sprite.userData.yOffset = yOffset;
+
                 sprite.position.set(
                     currentPositions[idx][0],
-                    currentPositions[idx][1] + 0.25,
+                    currentPositions[idx][1] + yOffset,
                     currentPositions[idx][2]
                 );
+
                 scene.add(sprite);
                 labelSprites.push(sprite);
                 }
 
                 // New word label first (orange)
-                addLabel(newIdx, "#ff9800");
+                addLabel(newIdx, "#ff9800", 0.35);
 
                 // Neighbor labels (white), deduped
-                neighborIdxs.forEach(i => addLabel(i, "#ffffff"));
+                neighborIdxs.forEach(i => addLabel(i, "#ffffff", 0.25));
             });
+
+            // ✅ now that all are placed, reduce overlap
+            resolveLabelOverlaps(14, 0.45);
 
             if (labelTimeout) clearTimeout(labelTimeout);
             labelTimeout = setTimeout(() => clearLabels(), 10000);
