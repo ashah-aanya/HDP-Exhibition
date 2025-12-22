@@ -64,7 +64,7 @@ def regenerate_cluster():
     # Last word is orange, all others are blue
     word_data = []
     for i, word in enumerate(words):
-        color = '#ff9800' if i == len(words) - 1 else "#0E2233"
+        color = '#ff9800' if i == len(words) - 1 else "#153653"
         word_data.append({'word': word, 'color': color})
 
     exhibition_data = {

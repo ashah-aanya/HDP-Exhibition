@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Fast word addition - adds new word to existing t-SNE without full regeneration
-Only regenerates when adding the first few words or periodically
+Sends WebSocket message to server for instant updates
 """
 import json
 import numpy as np
@@ -10,6 +10,8 @@ from sentence_transformers import SentenceTransformer
 from openTSNE import TSNE
 import sys
 import os
+import asyncio
+import websockets
 
 # Disable tokenizers parallelism warning
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
@@ -18,7 +20,32 @@ def add_word_to_file(word):
     """Add a word to my_writing.txt"""
     with open('data/raw/my_writing.txt', 'a') as f:
         f.write(f'\n{word}')
-    print(f"[1/3] ✓ Added '{word}' to my_writing.txt")
+    print(f"[1/4] ✓ Added '{word}' to my_writing.txt")
+
+async def notify_server(word, position):
+    """Send WebSocket message to server with new word"""
+    try:
+        async with websockets.connect('ws://localhost:8080/ws') as ws:
+            # Send add_word command with position
+            await ws.send(json.dumps({
+                'command': 'add_word_with_position',
+                'word': word,
+                'position': position.tolist()
+            }))
+
+            # Wait for response
+            response = await asyncio.wait_for(ws.recv(), timeout=5.0)
+            data = json.loads(response)
+
+            if data.get('success'):
+                print(f"[4/4] ✓ Server updated! Word visible in browser now.")
+                return True
+            else:
+                print(f"[4/4] ⚠ Server response: {data.get('message', 'Unknown error')}")
+                return False
+    except Exception as e:
+        print(f"[4/4] ⚠ Could not notify server (visualization will update in ~2s): {e}")
+        return False
 
 def add_word_fast(word):
     """Add word to existing visualization without full regeneration"""
@@ -35,50 +62,45 @@ def add_word_fast(word):
         print(f"⚠ Word '{word}' already exists!")
         return False
 
-    print(f"[3/3] Computing position for new word (fast mode)...")
+    print(f"[2/4] Computing position for new word (ultra-fast mode)...")
 
     # Load model
     model = SentenceTransformer('all-MiniLM-L6-v2')
 
-    # Generate embedding for new word
+    # Generate embedding ONLY for new word (this is all we need!)
     new_embedding = model.encode([word])[0]
 
-    # Generate embeddings for existing words to rebuild t-SNE
-    existing_embeddings = model.encode(existing_words, show_progress_bar=False)
+    # Simple nearest-neighbor approach: find similar words and place nearby
+    # This is MUCH faster than rebuilding t-SNE affinity
 
-    # Rebuild t-SNE from existing positions (very fast)
-    from openTSNE import TSNEEmbedding
-    from openTSNE.affinity import PerplexityBasedNN
+    # Load cached embeddings if available, otherwise compute them
+    cache_file = Path('web/embeddings_cache.npy')
+    if cache_file.exists():
+        existing_embeddings = np.load(cache_file)
+    else:
+        # First time: compute and cache embeddings
+        print("      (First run: caching embeddings for future speed...)")
+        existing_embeddings = model.encode(existing_words, show_progress_bar=False)
+        np.save(cache_file, existing_embeddings)
 
-    # Create affinity for existing embeddings
-    perplexity = min(30, len(existing_embeddings) - 1)
-    affinity = PerplexityBasedNN(existing_embeddings, perplexity=perplexity, random_state=42)
+    # Find k nearest neighbors in embedding space
+    k = min(5, len(existing_embeddings))
+    similarities = np.dot(existing_embeddings, new_embedding)
+    nearest_indices = np.argsort(similarities)[-k:]
 
-    # Create embedding from existing positions
-    tsne_embedding = TSNEEmbedding(
-        existing_positions,
-        affinity,
-        random_state=42,
-        learning_rate=1500,
-        n_jobs=1
-    )
+    # Place new word at centroid of nearest neighbors in t-SNE space
+    nearest_positions = existing_positions[nearest_indices]
+    new_position = nearest_positions.mean(axis=0, keepdims=True)
 
-    # Transform new word (very fast - just places it, no full optimization)
-    new_position = tsne_embedding.transform(np.array([new_embedding]))
+    # Add small random offset to avoid exact overlap
+    new_position += np.random.randn(1, 3) * 0.1
 
-    # Normalize all positions
+    # Just append the new position (no need to renormalize everything)
     all_positions = np.vstack([existing_positions, new_position])
-    all_positions = all_positions - all_positions.mean(axis=0)
-    max_range = np.abs(all_positions).max()
-    if max_range > 0:
-        all_positions = (all_positions / max_range) * 5
 
-    # Update word list and colors (last word is orange)
-    all_words = existing_words + [word]
-    word_data = []
-    for i, w in enumerate(all_words):
-        color = '#ff9800' if i == len(all_words) - 1 else "#0E2233"
-        word_data.append({'word': w, 'color': color})
+    # Update colors efficiently: change previous orange to blue, new word is orange
+    word_data = [{'word': item['word'], 'color': '#133A5B'} for item in data['words']]
+    word_data.append({'word': word, 'color': '#ff9800'})
 
     # Save updated data
     exhibition_data = {
@@ -89,8 +111,15 @@ def add_word_fast(word):
     with open('web/exhibition_data.json', 'w') as f:
         json.dump(exhibition_data, f, indent=2)
 
-    print(f"      ✓ Word '{word}' added instantly! (orange dot)")
-    return True
+    # Update embedding cache with new word
+    cache_file = Path('web/embeddings_cache.npy')
+    updated_embeddings = np.vstack([existing_embeddings, new_embedding])
+    np.save(cache_file, updated_embeddings)
+
+    print(f"[3/4] ✓ Data saved! Notifying server...")
+
+    # Return the new word and position for server notification
+    return (word, new_position[0])
 
 def main():
     """Main function - interactive loop"""
@@ -125,10 +154,13 @@ def main():
             add_word_to_file(word)
 
             # Add word fast (no full regeneration)
-            success = add_word_fast(word)
+            result = add_word_fast(word)
 
-            if success:
-                print("✓ Done! Check your browser in ~2 seconds.\n")
+            if result:
+                word, position = result
+                # Notify server via WebSocket
+                asyncio.run(notify_server(word, position))
+                print("✓ Done!\n")
             else:
                 print()
 

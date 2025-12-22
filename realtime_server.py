@@ -41,26 +41,43 @@ async def init_model():
     logger.info("Model loaded!")
 
 
-def initialize_tsne(initial_embeddings, perplexity=25):
+def initialize_tsne(initial_embeddings, perplexity=25, fast_mode=False):
     """Initialize t-SNE with initial embeddings - increased scatter and fast learning"""
     global tsne, embedding_obj
 
     # Perplexity must be less than n_samples
     perplexity = min(perplexity, max(1, len(initial_embeddings) - 1))
 
-    logger.info(f"Initializing t-SNE with {len(initial_embeddings)} points (faster smooth mode)...")
-    tsne = TSNE(
-        n_components=3,
-        random_state=42,
-        verbose=False,
-        n_jobs=1,
-        initialization="pca",   # big win vs random
-        early_exaggeration=32,  # faster cluster separation (try 24–64)
-        learning_rate="auto",   # usually more stable than hardcoding 1500
-        negative_gradient_method="bh",  # Barnes-Hut = faster
-        n_iter=400,             # shorter initial run; you animate further anyway
-        exaggeration=None       # let early_exaggeration handle it
-    )
+    if fast_mode:
+        # Ultra-fast settings for incremental word addition
+        logger.info(f"Initializing t-SNE with {len(initial_embeddings)} points (ULTRA-FAST rebuild mode)...")
+        tsne = TSNE(
+            n_components=3,
+            random_state=42,
+            verbose=False,
+            n_jobs=1,
+            initialization="pca",   # PCA is fastest
+            early_exaggeration=12,  # Lower = faster (but less dramatic separation)
+            learning_rate="auto",
+            negative_gradient_method="bh",  # Barnes-Hut
+            n_iter=150,             # Reduced from 400 for speed
+            exaggeration=None
+        )
+    else:
+        # Original settings for initial load
+        logger.info(f"Initializing t-SNE with {len(initial_embeddings)} points (faster smooth mode)...")
+        tsne = TSNE(
+            n_components=3,
+            random_state=42,
+            verbose=False,
+            n_jobs=1,
+            initialization="pca",   # big win vs random
+            early_exaggeration=32,  # faster cluster separation (try 24–64)
+            learning_rate="auto",   # usually more stable than hardcoding 1500
+            negative_gradient_method="bh",  # Barnes-Hut = faster
+            n_iter=400,             # shorter initial run; you animate further anyway
+            exaggeration=None       # let early_exaggeration handle it
+        )
 
     embedding_obj = tsne.fit(initial_embeddings)
 
@@ -163,9 +180,9 @@ async def broadcast_update():
 
     message = json.dumps(data)
 
-    # Send to all connected clients
+    # Send to all connected clients (make a copy to avoid iteration issues)
     disconnected = set()
-    for ws in websocket_clients:
+    for ws in list(websocket_clients):
         try:
             await ws.send_str(message)
         except Exception as e:
@@ -185,16 +202,37 @@ async def animation_loop():
     while is_animating:
         try:
             if len(words) >= 2 and embedding_obj is not None:
-                # Optimize t-SNE with more iterations for dramatic clustering
-                embedding_obj = embedding_obj.optimize(n_iter=15, momentum=0.95)
+                # Check if embedding_obj size matches current words
+                if len(embedding_obj) == len(words):
+                    # Normal case: all words are in the embedding
+                    embedding_obj = embedding_obj.optimize(n_iter=15, momentum=0.95)
 
-                # Get updated positions
-                positions = embedding_obj[:].copy()
-                positions = normalize_positions(positions)
-                current_positions = positions.tolist()
+                    # Get updated positions
+                    positions = embedding_obj[:].copy()
+                    positions = normalize_positions(positions)
+                    current_positions = positions.tolist()
 
-                # Broadcast to all clients
-                await broadcast_update()
+                    # Broadcast to all clients
+                    await broadcast_update()
+                else:
+                    # New words were added - animate only the original words
+                    # Update just the original positions, keep new words at their initial positions
+                    num_original = len(embedding_obj)
+
+                    # Optimize the original embedding
+                    embedding_obj = embedding_obj.optimize(n_iter=15, momentum=0.95)
+
+                    # Get updated positions for original words
+                    positions = embedding_obj[:].copy()
+                    positions = normalize_positions(positions)
+
+                    # Update only the original positions in current_positions
+                    for i in range(num_original):
+                        current_positions[i] = positions[i].tolist()
+
+                    # New words (beyond num_original) keep their initial positions
+                    # Broadcast to all clients
+                    await broadcast_update()
 
             await asyncio.sleep(0.1)  # Update 10 times per second - more stable for large datasets
         except Exception as e:
@@ -206,6 +244,8 @@ async def animation_loop():
 
 async def websocket_handler(request):
     """Handle WebSocket connections"""
+    global words, word_colors, embeddings, current_positions, embedding_obj, is_animating, animation_task
+
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
@@ -251,7 +291,6 @@ async def websocket_handler(request):
                                 }))
 
                     elif command == 'start_animation':
-                        global is_animating, animation_task
                         if not is_animating:
                             is_animating = True
                             animation_task = asyncio.create_task(animation_loop())
@@ -269,6 +308,64 @@ async def websocket_handler(request):
                             'message': 'Animation stopped'
                         }))
 
+                    elif command == 'add_word_with_position':
+                        # Fast word addition - rebuild t-SNE with cached embeddings + new word
+                        try:
+                            word = data.get('word', '').strip()
+                            position = data.get('position', [0, 0, 0])
+
+                            logger.info(f"Received add_word_with_position: word='{word}', position={position}")
+
+                            if word and word.lower() not in [w.lower() for w in words]:
+                                # Add word
+                                words.append(word)
+                                word_colors.append('#ff9800')  # Orange for new word
+
+                                # Change previous orange words to blue
+                                for i in range(len(word_colors) - 1):
+                                    if word_colors[i] == '#ff9800':
+                                        word_colors[i] = '#133A5B'
+
+                                # Generate embedding for the new word (ONLY new word, not all)
+                                new_embedding = model.encode([word])[0]
+                                embeddings.append(new_embedding.tolist())
+
+                                # Rebuild t-SNE with ALL embeddings (cached + new)
+                                # This uses the cached embeddings, so no recalculation of 4000+ words
+                                logger.info(f"Rebuilding t-SNE with {len(embeddings)} words (using cached embeddings)...")
+                                embeddings_array = np.array(embeddings)
+
+                                # Use fast_mode=True for quick rebuild
+                                positions = initialize_tsne(embeddings_array, fast_mode=True)
+                                current_positions = positions.tolist()
+
+                                logger.info(f"Word '{word}' added successfully. Total words: {len(words)}")
+
+                                # Broadcast to all clients immediately
+                                await broadcast_update()
+
+                                await ws.send_str(json.dumps({
+                                    'type': 'response',
+                                    'success': True,
+                                    'message': f"Word '{word}' added"
+                                }))
+                            else:
+                                logger.warning(f"Word '{word}' already exists or is invalid")
+                                await ws.send_str(json.dumps({
+                                    'type': 'response',
+                                    'success': False,
+                                    'message': f"Word '{word}' already exists or is invalid"
+                                }))
+                        except Exception as e:
+                            logger.error(f"Error in add_word_with_position: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            await ws.send_str(json.dumps({
+                                'type': 'response',
+                                'success': False,
+                                'message': f"Error: {str(e)}"
+                            }))
+
                 except json.JSONDecodeError:
                     logger.error("Invalid JSON received")
                 except Exception as e:
@@ -278,7 +375,7 @@ async def websocket_handler(request):
                 logger.error(f'WebSocket error: {ws.exception()}')
 
     finally:
-        websocket_clients.remove(ws)
+        websocket_clients.discard(ws)  # Use discard instead of remove to avoid KeyError
         logger.info(f"WebSocket connection closed. Total clients: {len(websocket_clients)}")
 
     return ws
@@ -346,8 +443,8 @@ async def start_background_tasks(app):
     await init_model()
     await load_existing_data()
 
-    # Start file watcher in background
-    asyncio.create_task(watch_data_file())
+    # File watcher disabled - using WebSocket messaging for updates instead
+    # asyncio.create_task(watch_data_file())
 
 
 async def cleanup_background_tasks(app):
