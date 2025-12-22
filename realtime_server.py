@@ -25,6 +25,7 @@ model = None
 tsne = None
 embedding_obj = None
 words = []
+word_colors = []  # Store colors for each word
 embeddings = []
 current_positions = []
 websocket_clients = set()
@@ -50,13 +51,15 @@ def initialize_tsne(initial_embeddings, perplexity=25):
     logger.info(f"Initializing t-SNE with {len(initial_embeddings)} points (faster smooth mode)...")
     tsne = TSNE(
         n_components=3,
-        perplexity=perplexity,
-        learning_rate=1500,      # Very high learning rate for dramatic clustering movement
         random_state=42,
-        n_jobs=1,
         verbose=False,
-        initialization='random',
-        early_exaggeration=12.0
+        n_jobs=1,
+        initialization="pca",   # big win vs random
+        early_exaggeration=32,  # faster cluster separation (try 24–64)
+        learning_rate="auto",   # usually more stable than hardcoding 1500
+        negative_gradient_method="bh",  # Barnes-Hut = faster
+        n_iter=400,             # shorter initial run; you animate further anyway
+        exaggeration=None       # let early_exaggeration handle it
     )
 
     embedding_obj = tsne.fit(initial_embeddings)
@@ -68,7 +71,6 @@ def initialize_tsne(initial_embeddings, perplexity=25):
     logger.info("t-SNE initialized in high-drama mode!")
     return positions
 
-
 def normalize_positions(positions):
     """Normalize positions to a consistent scale"""
     positions = positions - positions.mean(axis=0)
@@ -78,7 +80,7 @@ def normalize_positions(positions):
     return positions
 
 
-async def add_word(word, color='#2196f3'):
+async def add_word(word, color="#151A1D"):
     """Add a new word to the visualization"""
     global words, embeddings, current_positions, embedding_obj
 
@@ -147,9 +149,15 @@ async def broadcast_update():
     if not websocket_clients:
         return
 
+    # Build word data with colors from word_colors
+    word_data = []
+    for i, w in enumerate(words):
+        color = word_colors[i] if i < len(word_colors) else '#2196f3'
+        word_data.append({'word': w, 'color': color})
+
     data = {
         'type': 'update',
-        'words': [{'word': w, 'color': '#2196f3'} for w in words],
+        'words': word_data,
         'positions': current_positions
     }
 
@@ -167,7 +175,7 @@ async def broadcast_update():
     # Remove disconnected clients
     websocket_clients.difference_update(disconnected)
 
-
+## draw points through line smooth
 async def animation_loop():
     """Continuously optimize t-SNE with perpetual movement"""
     global is_animating, embedding_obj, current_positions
@@ -188,7 +196,7 @@ async def animation_loop():
                 # Broadcast to all clients
                 await broadcast_update()
 
-            await asyncio.sleep(0.02)  # Update 50 times per second for more frequent updates!
+            await asyncio.sleep(0.1)  # Update 10 times per second - more stable for large datasets
         except Exception as e:
             logger.error(f"Error in animation loop: {e}")
             await asyncio.sleep(0.05)
@@ -204,10 +212,15 @@ async def websocket_handler(request):
     websocket_clients.add(ws)
     logger.info(f"New WebSocket connection. Total clients: {len(websocket_clients)}")
 
-    # Send initial state
+    # Send initial state with colors from word_colors
+    word_data = []
+    for i, w in enumerate(words):
+        color = word_colors[i] if i < len(word_colors) else '#2196f3'
+        word_data.append({'word': w, 'color': color})
+
     initial_data = {
         'type': 'init',
-        'words': [{'word': w, 'color': '#2196f3'} for w in words],
+        'words': word_data,
         'positions': current_positions
     }
     await ws.send_str(json.dumps(initial_data))
@@ -273,7 +286,7 @@ async def websocket_handler(request):
 
 async def load_existing_data():
     """Load existing words from the data file if available"""
-    global words, embeddings, current_positions
+    global words, word_colors, embeddings, current_positions, embedding_obj
 
     data_file = Path('web/exhibition_data.json')
     if data_file.exists():
@@ -282,29 +295,59 @@ async def load_existing_data():
             data = json.load(f)
 
         if data.get('words') and data.get('frames'):
-            # Load words
+            # Load words and their colors
             words = [item['word'] for item in data['words']]
+            word_colors = [item['color'] for item in data['words']]
 
             # Generate embeddings for existing words
             logger.info(f"Generating embeddings for {len(words)} words...")
             embeddings_array = model.encode(words)
             embeddings = embeddings_array.tolist()  # Keep as list for consistency
 
-            # Use the last frame as starting positions
-            current_positions = data['frames'][-1]
-
             # Initialize t-SNE with existing data
+            # This updates the global embedding_obj
             initialize_tsne(embeddings_array)
+
+            # Use the positions from the saved file
+            current_positions = data['frames'][-1]
 
             logger.info(f"Loaded {len(words)} existing words")
     else:
         logger.info("No existing data found. Starting fresh.")
 
 
+async def watch_data_file():
+    """Watch exhibition_data.json for changes and reload when modified"""
+    data_file = Path('web/exhibition_data.json')
+    last_modified = data_file.stat().st_mtime if data_file.exists() else 0
+
+    logger.info("File watcher started - monitoring exhibition_data.json for changes")
+
+    while True:
+        await asyncio.sleep(2)  # Check every 2 seconds
+
+        if data_file.exists():
+            current_modified = data_file.stat().st_mtime
+
+            if current_modified > last_modified:
+                logger.info("="*60)
+                logger.info("exhibition_data.json has been updated! Reloading...")
+                logger.info("="*60)
+
+                await load_existing_data()
+                await broadcast_update()  # Send new data to all connected clients
+
+                last_modified = current_modified
+                logger.info("✓ Data reloaded and sent to all clients!")
+
+
 async def start_background_tasks(app):
     """Initialize model and load data on startup"""
     await init_model()
     await load_existing_data()
+
+    # Start file watcher in background
+    asyncio.create_task(watch_data_file())
 
 
 async def cleanup_background_tasks(app):
