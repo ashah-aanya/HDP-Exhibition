@@ -365,6 +365,53 @@
             return sprite;
         }
 
+        function resolveLabelOverlaps(iterations = 10, minDist = 0.35) {
+            // Simple 3D repulsion between sprite positions
+            for (let it = 0; it < iterations; it++) {
+                for (let a = 0; a < labelSprites.length; a++) {
+                for (let b = a + 1; b < labelSprites.length; b++) {
+                    const A = labelSprites[a].position;
+                    const B = labelSprites[b].position;
+
+                    const dx = B.x - A.x;
+                    const dy = B.y - A.y;
+                    const dz = B.z - A.z;
+
+                    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz) + 1e-6;
+                    if (dist < minDist) {
+                    const push = (minDist - dist) * 0.5;
+                    const ux = dx / dist, uy = dy / dist, uz = dz / dist;
+
+                    // Push mostly in Y so it feels like stacked labels
+                    A.y -= uy * push;
+                    B.y += uy * push;
+
+                    // Tiny X/Z push to avoid perfect columns
+                    A.x -= ux * push * 0.2;
+                    B.x += ux * push * 0.2;
+                    A.z -= uz * push * 0.2;
+                    B.z += uz * push * 0.2;
+                    }
+                }
+                }
+            }
+        }
+
+        function updateLabelAnchors() {
+            // Each sprite stores which point index it belongs to
+            for (const s of labelSprites) {
+                const idx = s.userData?.pointIndex;
+                if (idx == null || !currentPositions[idx]) continue;
+
+                s.position.set(
+                currentPositions[idx][0],
+                currentPositions[idx][1] + (s.userData?.yOffset ?? 0.25),
+                currentPositions[idx][2]
+                );
+            }
+        }
+
+
         function showNeighborLabels(neighborsForNewWords) {
             clearLabels();
 
@@ -372,38 +419,40 @@
                 const newIdx = entry.newWordIndex;
                 const neighborIdxs = (entry.neighbors || []).slice(0, 8);
 
-                // New word label (orange)
-                if (currentPositions[newIdx]) {
-                const w = words[newIdx]?.word || "";
-                const sprite = makeTextSprite(w, "#ff9800");
+                // Track which word strings we've already labeled (case-insensitive)
+                const seen = new Set();
+
+                // Helper to add a label only if its word hasn't been shown yet
+                function addLabel(idx, color) {
+                if (!currentPositions[idx]) return;
+
+                const w = (words[idx]?.word || "").trim();
+                if (!w) return;
+
+                const key = w.toLowerCase();
+                if (seen.has(key)) return;      // ✅ skip duplicates
+                seen.add(key);
+
+                const sprite = makeTextSprite(w, color);
                 sprite.position.set(
-                    currentPositions[newIdx][0],
-                    currentPositions[newIdx][1] + 0.25,
-                    currentPositions[newIdx][2]
+                    currentPositions[idx][0],
+                    currentPositions[idx][1] + 0.25,
+                    currentPositions[idx][2]
                 );
                 scene.add(sprite);
                 labelSprites.push(sprite);
                 }
 
-                // Neighbor labels (white)
-                neighborIdxs.forEach(i => {
-                if (!currentPositions[i]) return;
-                const w = words[i]?.word || "";
-                const sprite = makeTextSprite(w, "#ffffff");
-                sprite.position.set(
-                    currentPositions[i][0],
-                    currentPositions[i][1] + 0.25,
-                    currentPositions[i][2]
-                );
-                scene.add(sprite);
-                labelSprites.push(sprite);
-                });
+                // New word label first (orange)
+                addLabel(newIdx, "#ff9800");
+
+                // Neighbor labels (white), deduped
+                neighborIdxs.forEach(i => addLabel(i, "#ffffff"));
             });
 
             if (labelTimeout) clearTimeout(labelTimeout);
-            labelTimeout = setTimeout(() => clearLabels(), 6000);
+            labelTimeout = setTimeout(() => clearLabels(), 10000);
         }
-
 
         function updateDynamicCamera() {
             if (currentPositions.length === 0) return;
