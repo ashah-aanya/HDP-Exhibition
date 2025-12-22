@@ -35,6 +35,8 @@
         let currentPositions = [];
         let targetPositions = [];
         let velocities = [];
+        let labelSprites = [];
+        let labelTimeout = null;
 
         // Dynamic viewpoint state
         let cameraState = {
@@ -44,7 +46,11 @@
             cameraDistance: 15,      // Larger initial distance to use full landscape
             targetDistance: 15,      // Smooth camera movement
             lastFocusTime: 0,        // Track when we last changed focus
-            focusTransitionDuration: 10000  // ms between focus changes (10 seconds)
+            focusTransitionDuration: 10000,  // ms between focus changes (10 seconds)
+            forcedFocusIndex: null,        // when set, camera pans to this dot
+            forcedFocusUntil: 0,           // keep focus until this time
+            forcedHoldDuration: 7000,      // ms to hold on new word (tweak)
+            snapTransitionDuration: 2500 
         };
 
         // Initialize Three.js scene
@@ -84,6 +90,22 @@
             animate();
         }
 
+        function focusCameraOnIndex(idx) {
+            if (!currentPositions[idx]) return;
+
+            const now = Date.now();
+            cameraState.forcedFocusIndex = idx;
+            cameraState.forcedFocusUntil = now + cameraState.forcedHoldDuration;
+
+            // Start transition *from current focusPosition* toward the new target
+            cameraState.lastFocusTime = now;
+            cameraState.focusTransitionDuration = cameraState.snapTransitionDuration;
+
+            // Make the current interpolation "start point" be whatever we're looking at now
+            cameraState.focusIndex = idx;         // treat as current target
+            cameraState.nextFocusIndex = idx;     // no wandering during snap
+        }
+
         // Add 3D coordinate axes
         function addAxes() {
             const axisLength = 2;
@@ -115,13 +137,18 @@
 
         // Create or update point cloud
         function updatePoints() {
-            // Remove old points
+            // If points already exist AND word count is same, just update buffers
+            if (points && points.geometry.getAttribute('position')?.count === words.length) {
+                updatePointBuffers();
+                return;
+            }
+
+            // Otherwise rebuild (word count changed)
             if (points) {
                 scene.remove(points);
                 points.geometry.dispose();
                 points.material.dispose();
             }
-
             if (words.length === 0) return;
 
             const geometry = new THREE.BufferGeometry();
@@ -171,7 +198,8 @@
                 sizeAttenuation: true,
                 map: texture,
                 alphaTest: 0.5,
-                blending: THREE.AdditiveBlending
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
             });
 
             points = new THREE.Points(geometry, material);
@@ -262,57 +290,175 @@
             return bestIndex;
         }
 
-        // Update camera to focus on dynamic viewpoint
+        function updatePointBuffers() {
+            if (!points) return;
+
+            // Update positions buffer (keep same typed array)
+            const posAttr = points.geometry.getAttribute('position');
+            const positions = posAttr.array;
+
+            for (let i = 0; i < words.length; i++) {
+                positions[i * 3] = currentPositions[i][0];
+                positions[i * 3 + 1] = currentPositions[i][1];
+                positions[i * 3 + 2] = currentPositions[i][2];
+            }
+            posAttr.needsUpdate = true;
+
+            // Update colors buffer if needed
+            const colAttr = points.geometry.getAttribute('color');
+            const colors = colAttr.array;
+
+            for (let i = 0; i < words.length; i++) {
+                const c = new THREE.Color(words[i].color);
+                colors[i * 3] = c.r;
+                colors[i * 3 + 1] = c.g;
+                colors[i * 3 + 2] = c.b;
+            }
+            colAttr.needsUpdate = true;
+        }
+
+        function clearLabels() {
+            labelSprites.forEach(s => {
+                scene.remove(s);
+                if (s.material && s.material.map) s.material.map.dispose();
+                if (s.material) s.material.dispose();
+            });
+            labelSprites = [];
+        }
+
+        function makeTextSprite(text, color = "#ffffff") {
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+
+            const fontSize = 36;
+            ctx.font = `${fontSize}px Arial`;
+            const padding = 16;
+            const textWidth = Math.ceil(ctx.measureText(text).width);
+
+            canvas.width = textWidth + padding * 2;
+            canvas.height = fontSize + padding * 2;
+
+            const ctx2 = canvas.getContext("2d");
+            ctx2.font = `${fontSize}px Arial`;
+            ctx2.fillStyle = "rgba(0,0,0,0.65)";
+            ctx2.fillRect(0, 0, canvas.width, canvas.height);
+            ctx2.fillStyle = color;
+            ctx2.fillText(text, padding, fontSize + Math.floor(padding * 0.6));
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+
+            // ✅ critical: render on top of your additive points
+            const material = new THREE.SpriteMaterial({
+                map: texture,
+                transparent: true,
+                depthTest: false,
+                depthWrite: false
+            });
+
+            const sprite = new THREE.Sprite(material);
+            sprite.renderOrder = 999;
+            const aspect = canvas.width / canvas.height;
+            const height = 0.5;
+            sprite.scale.set(height * aspect, height, 1);
+
+            return sprite;
+        }
+
+        function showNeighborLabels(neighborsForNewWords) {
+            clearLabels();
+
+            neighborsForNewWords.forEach(entry => {
+                const newIdx = entry.newWordIndex;
+                const neighborIdxs = (entry.neighbors || []).slice(0, 8);
+
+                // New word label (orange)
+                if (currentPositions[newIdx]) {
+                const w = words[newIdx]?.word || "";
+                const sprite = makeTextSprite(w, "#ff9800");
+                sprite.position.set(
+                    currentPositions[newIdx][0],
+                    currentPositions[newIdx][1] + 0.25,
+                    currentPositions[newIdx][2]
+                );
+                scene.add(sprite);
+                labelSprites.push(sprite);
+                }
+
+                // Neighbor labels (white)
+                neighborIdxs.forEach(i => {
+                if (!currentPositions[i]) return;
+                const w = words[i]?.word || "";
+                const sprite = makeTextSprite(w, "#ffffff");
+                sprite.position.set(
+                    currentPositions[i][0],
+                    currentPositions[i][1] + 0.25,
+                    currentPositions[i][2]
+                );
+                scene.add(sprite);
+                labelSprites.push(sprite);
+                });
+            });
+
+            if (labelTimeout) clearTimeout(labelTimeout);
+            labelTimeout = setTimeout(() => clearLabels(), 6000);
+        }
+
+
         function updateDynamicCamera() {
             if (currentPositions.length === 0) return;
 
-            // Periodically find new focus point
             const now = Date.now();
-            if (now - cameraState.lastFocusTime > cameraState.focusTransitionDuration) {
+
+            // ✅ If we have a forced focus (new word), lock onto it
+            const forcing = (cameraState.forcedFocusIndex !== null && now < cameraState.forcedFocusUntil);
+
+            if (forcing) {
+                cameraState.focusIndex = cameraState.forcedFocusIndex;
+                cameraState.nextFocusIndex = cameraState.forcedFocusIndex; // lock
+            } else {
+                // ✅ back to normal roaming behavior
+                cameraState.focusTransitionDuration = 10000; // restore default roam duration
+
+                if (now - cameraState.lastFocusTime > cameraState.focusTransitionDuration) {
                 cameraState.focusIndex = cameraState.nextFocusIndex;
                 cameraState.nextFocusIndex = findAdjacentCluster(cameraState.focusIndex);
                 cameraState.lastFocusTime = now;
+                }
             }
 
             const currentFocusPoint = currentPositions[cameraState.focusIndex];
             const nextFocusPoint = currentPositions[cameraState.nextFocusIndex];
 
-            // Smoothly interpolate focus position between current and next focus
-            // Transition over the entire duration for smooth movement
             const timeSinceFocus = now - cameraState.lastFocusTime;
             const transitionProgress = Math.min(timeSinceFocus / cameraState.focusTransitionDuration, 1.0);
-
-            // Ease-out cubic for smooth deceleration
             const easeProgress = 1 - Math.pow(1 - transitionProgress, 3);
 
             for (let i = 0; i < 3; i++) {
                 cameraState.focusPosition[i] =
-                    currentFocusPoint[i] + (nextFocusPoint[i] - currentFocusPoint[i]) * easeProgress;
+                currentFocusPoint[i] + (nextFocusPoint[i] - currentFocusPoint[i]) * easeProgress;
             }
 
-            // Calculate density at current focus to determine zoom
             const density = calculateDensity(cameraState.focusIndex, 2.5);
             const maxDensity = currentPositions.length * 0.3;
 
-            // Higher density = closer zoom (smaller distance)
-            // Distance ranges from 6 (very dense) to 20 (sparse) for landscape viewing
             cameraState.targetDistance = 20 - (Math.min(density, maxDensity) / maxDensity) * 14;
-
-            // Smoothly interpolate camera distance
             cameraState.cameraDistance += (cameraState.targetDistance - cameraState.cameraDistance) * 0.02;
 
-            // Create very subtle camera orbit around focus point
             const orbitRadius = cameraState.cameraDistance;
-            const time = now / 1000;
-            const angle = (time * 0.02) % (Math.PI * 2); // Extremely slow rotation (0.02 rad/s)
+            const t = now / 1000;
+            const angle = (t * 0.02) % (Math.PI * 2);
 
-            // Position camera in subtle orbit around smoothly interpolated focus point
             camera.position.x = cameraState.focusPosition[0] + Math.cos(angle) * orbitRadius * 0.3;
             camera.position.y = cameraState.focusPosition[1] + Math.sin(angle) * (orbitRadius * 0.15);
             camera.position.z = cameraState.focusPosition[2] + Math.sin(angle) * orbitRadius * 0.3 + orbitRadius;
 
-            // Always look at the smoothly interpolated focus point
             camera.lookAt(cameraState.focusPosition[0], cameraState.focusPosition[1], cameraState.focusPosition[2]);
+
+            // ✅ clear forced focus once time is up
+            if (cameraState.forcedFocusIndex !== null && now >= cameraState.forcedFocusUntil) {
+                cameraState.forcedFocusIndex = null;
+            }
         }
 
         // Animation loop
@@ -353,17 +499,33 @@
                     velocities = data.positions.map(() => [0, 0, 0]);
                     updatePoints();
                 } else if (data.type === 'update') {
-                    // Update state
+                    const prevCount = words.length;
+                    const prevLen = words.length;
+
                     words = data.words;
                     targetPositions = data.positions;
 
-                    // Ensure we have enough current positions and velocities
+                    if (data.words.length > prevCount) {
+                        const newIdx = data.words.length - 1;
+                        focusCameraOnIndex(newIdx);
+                    }
+
                     while (currentPositions.length < words.length) {
                         currentPositions.push([...targetPositions[currentPositions.length]]);
                         velocities.push([0, 0, 0]);
                     }
 
-                    updatePoints();
+                    // Only rebuild if new words were added (length change)
+                    if (!points || words.length !== prevLen) {
+                        updatePoints();
+                    } else {
+                        // Otherwise just update colors buffer (cheap)
+                        updatePointBuffers();
+                    }
+
+                    if (data.neighborsForNewWords) {
+                        showNeighborLabels(data.neighborsForNewWords);
+                    }
                 }
             };
 

@@ -31,7 +31,7 @@ current_positions = []
 websocket_clients = set()
 animation_task = None
 is_animating = False
-tsne_warmup_ticks = 4   # <-- ADD THIS (e.g., 30 ticks ≈ 3 seconds at 10 FPS)
+tsne_warmup_ticks = 2   # <-- ADD THIS (e.g., 30 ticks ≈ 3 seconds at 10 FPS)
 
 
 
@@ -101,6 +101,31 @@ def normalize_positions(positions):
         positions = (positions / max_range) * 5
     return positions
 
+def topk_cosine_neighbors(embeddings_list, new_embedding, k=8):
+    """
+    embeddings_list: list of embeddings as python lists (same order as words)
+    new_embedding: np.array shape (D,)
+    returns: list of indices of closest existing points (excluding the new one)
+    """
+    E = np.asarray(embeddings_list, dtype=np.float32)  # (N, D)
+    x = np.asarray(new_embedding, dtype=np.float32)    # (D,)
+
+    # normalize
+    E_norm = E / (np.linalg.norm(E, axis=1, keepdims=True) + 1e-12)
+    x_norm = x / (np.linalg.norm(x) + 1e-12)
+
+    sims = E_norm @ x_norm  # (N,)
+    # The new embedding is appended last in your current flow, so exclude last index
+    sims[-1] = -1.0
+
+    k = min(k, max(0, len(sims) - 1))
+    if k <= 0:
+        return [], []
+
+    idx = np.argpartition(-sims, kth=k-1)[:k]
+    idx = idx[np.argsort(-sims[idx])]
+
+    return idx.tolist(), sims[idx].tolist()
 
 async def add_word(word, color="#151A1D"):
     """Add a new word to the visualization"""
@@ -165,8 +190,7 @@ async def optimize_tsne_step(iterations=50):
     # Broadcast update
     await broadcast_update()
 
-
-async def broadcast_update():
+async def broadcast_update(neighborsForNewWords=None):
     """Send current state to all connected clients"""
     if not websocket_clients:
         return
@@ -182,6 +206,9 @@ async def broadcast_update():
         'words': word_data,
         'positions': current_positions
     }
+
+    if neighborsForNewWords is not None:
+        data['neighborsForNewWords'] = neighborsForNewWords
 
     message = json.dumps(data)
 
@@ -430,6 +457,17 @@ async def websocket_handler(request):
                                 new_embedding = model.encode([word])[0]
                                 embeddings.append(new_embedding.tolist())
 
+                                # Compute nearest neighbors in embedding space (for labeling)
+                                neighbors_payload = None
+                                if len(words) >= 3:
+                                    neighbor_idxs, neighbor_scores = topk_cosine_neighbors(embeddings, new_embedding, k=8)
+                                    new_idx = len(words) - 1
+                                    neighbors_payload = [{
+                                        "newWordIndex": new_idx,
+                                        "neighbors": neighbor_idxs,
+                                        "scores": neighbor_scores
+                                    }]
+
                                 # Rebuild t-SNE with ALL embeddings (cached + new)
                                 # This uses the cached embeddings, so no recalculation of 4000+ words
                                 logger.info(f"Rebuilding t-SNE with {len(embeddings)} words (using cached embeddings)...")
@@ -441,8 +479,8 @@ async def websocket_handler(request):
 
                                 logger.info(f"Word '{word}' added successfully. Total words: {len(words)}")
 
-                                # Broadcast to all clients immediately
-                                await broadcast_update()
+                                # Broadcast to all clients immediately (include neighbors payload)
+                                await broadcast_update(neighborsForNewWords=neighbors_payload)
 
                                 await ws.send_str(json.dumps({
                                     'type': 'response',
