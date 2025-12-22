@@ -31,6 +31,8 @@ current_positions = []
 websocket_clients = set()
 animation_task = None
 is_animating = False
+tsne_warmup_ticks = 4   # <-- ADD THIS (e.g., 30 ticks ≈ 3 seconds at 10 FPS)
+
 
 
 async def init_model():
@@ -43,7 +45,8 @@ async def init_model():
 
 def initialize_tsne(initial_embeddings, perplexity=25, fast_mode=False):
     """Initialize t-SNE with initial embeddings - increased scatter and fast learning"""
-    global tsne, embedding_obj
+    global tsne, embedding_obj, tsne_warmup_ticks
+
 
     # Perplexity must be less than n_samples
     perplexity = min(perplexity, max(1, len(initial_embeddings) - 1))
@@ -80,6 +83,8 @@ def initialize_tsne(initial_embeddings, perplexity=25, fast_mode=False):
         )
 
     embedding_obj = tsne.fit(initial_embeddings)
+    tsne_warmup_ticks = 30  # <-- ADD THIS (tweak: 20–60)
+
 
     # Get initial positions
     positions = embedding_obj[:].copy()
@@ -192,28 +197,123 @@ async def broadcast_update():
     # Remove disconnected clients
     websocket_clients.difference_update(disconnected)
 
+def kmeans_simple(X, k=8, n_iter=8, seed=42):
+    """
+    Tiny k-means (no sklearn) for clustering positions.
+    X: (N, D)
+    returns: labels (N,), centers (k, D)
+    """
+    rng = np.random.default_rng(seed)
+    N = X.shape[0]
+    k = max(1, min(k, N))
+
+    # init centers by sampling points
+    centers = X[rng.choice(N, size=k, replace=False)].copy()
+
+    for _ in range(n_iter):
+        # assign
+        d2 = ((X[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2)  # (N,k)
+        labels = d2.argmin(axis=1)
+
+        # update
+        for j in range(k):
+            mask = labels == j
+            if mask.any():
+                centers[j] = X[mask].mean(axis=0)
+            else:
+                centers[j] = X[rng.integers(0, N)]
+    return labels, centers
+
+
+def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
+                       cluster_drift_scale=0.03, point_wobble_scale=0.005,
+                       damping=0.995, seed=42):
+    """
+    Move points by cluster-level drift + tiny per-point wobble.
+    Recomputes clusters every `cluster_update_every` frames to stay cheap.
+    """
+    # keep state on the function
+    if not hasattr(cluster_drift_step, "frame"):
+        cluster_drift_step.frame = 0
+        cluster_drift_step.labels = None
+        cluster_drift_step.centers = None
+        cluster_drift_step.cluster_offsets = None
+
+    cluster_drift_step.frame += 1
+    positions = np.asarray(current_positions, dtype=np.float32)
+    N, D = positions.shape
+
+    # Choose k based on N (keeps it calm and stable)
+    k_eff = max(2, min(k, int(np.sqrt(N)) if N > 4 else N))
+
+    # Recompute clusters occasionally (not every frame)
+    if (cluster_drift_step.labels is None or
+        cluster_drift_step.frame % cluster_update_every == 1 or
+        cluster_drift_step.labels.shape[0] != N):
+
+        labels, centers = kmeans_simple(positions, k=k_eff, n_iter=6, seed=seed)
+        cluster_drift_step.labels = labels
+        cluster_drift_step.centers = centers
+
+        # init cluster offsets (the “breathe” direction per cluster)
+        rng = np.random.default_rng(seed + cluster_drift_step.frame)
+        cluster_drift_step.cluster_offsets = rng.normal(0.0, cluster_drift_scale, size=centers.shape).astype(np.float32)
+
+    labels = cluster_drift_step.labels
+    centers = cluster_drift_step.centers
+    offsets = cluster_drift_step.cluster_offsets
+
+    # Slowly change cluster offsets over time (smooth breathing)
+    rng = np.random.default_rng(seed + cluster_drift_step.frame)
+    offsets = 0.98 * offsets + 0.02 * rng.normal(0.0, cluster_drift_scale, size=offsets.shape).astype(np.float32)
+    cluster_drift_step.cluster_offsets = offsets
+
+    # Apply movement: each point follows its cluster offset + tiny wobble
+    drift = offsets[labels]  # (N,D)
+    wobble = rng.normal(0.0, point_wobble_scale, size=(N, D)).astype(np.float32)
+
+    positions = positions + drift + wobble
+
+    # Gentle damping
+    positions *= damping
+
+    return positions
+
 ## draw points through line smooth
 async def animation_loop():
     """Continuously optimize t-SNE with perpetual movement"""
-    global is_animating, embedding_obj, current_positions
+    global is_animating, embedding_obj, current_positions, tsne_warmup_ticks
 
     logger.info("Animation loop started - ULTRA-FAST perpetual motion mode")
 
     while is_animating:
         try:
             if len(words) >= 2 and embedding_obj is not None:
-                # Check if embedding_obj size matches current words
                 if len(embedding_obj) == len(words):
-                    # Normal case: all words are in the embedding
-                    embedding_obj = embedding_obj.optimize(n_iter=15, momentum=0.95)
+                    if tsne_warmup_ticks > 0:
+                        # 🔥 Warmup phase: run real t-SNE for the first few ticks
+                        embedding_obj = embedding_obj.optimize(n_iter=15, momentum=0.95)
+                        tsne_warmup_ticks -= 1
 
-                    # Get updated positions
-                    positions = embedding_obj[:].copy()
-                    positions = normalize_positions(positions)
-                    current_positions = positions.tolist()
+                        positions = embedding_obj[:].copy()
+                        positions = normalize_positions(positions)
+                        current_positions = positions.tolist()
 
-                    # Broadcast to all clients
-                    await broadcast_update()
+                        await broadcast_update()
+                    else:
+                        # 🟢 After warmup: cluster-based gentle drift (calm, cohesive)
+                        positions = cluster_drift_step(
+                            current_positions,
+                            k=8,
+                            cluster_update_every=40,      # recompute clustering every ~2s at 10 FPS
+                            cluster_drift_scale=0.008,    # how much clusters drift
+                            point_wobble_scale=0.001,     # tiny individual wobble
+                            damping=0.995
+                        )
+
+                        positions = normalize_positions(positions)
+                        current_positions = positions.tolist()
+                        await broadcast_update()
                 else:
                     # New words were added - animate only the original words
                     # Update just the original positions, keep new words at their initial positions
