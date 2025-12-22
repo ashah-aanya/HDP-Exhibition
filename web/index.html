@@ -22,6 +22,7 @@
     let words = [];
     let currentPositions = [];
     let targetPositions = [];
+    let smoothedTargets = []; 
     let velocities = [];
 
     // labels (nearest neighbors)
@@ -165,6 +166,22 @@
       labelTimeout = setTimeout(() => clearLabels(), 6000);
     }
 
+    function applyServerTargets(newTargets) {
+        // First time / size change: copy directly
+        if (!smoothedTargets || smoothedTargets.length !== newTargets.length) {
+            smoothedTargets = newTargets.map(p => [p[0], p[1], p[2]]);
+            return;
+        }
+
+        // Smooth the targets themselves (low-pass filter)
+        const a = 0.12; // <-- lower = calmer + less "pause"; try 0.08–0.18
+        for (let i = 0; i < newTargets.length; i++) {
+            smoothedTargets[i][0] += (newTargets[i][0] - smoothedTargets[i][0]) * a;
+            smoothedTargets[i][1] += (newTargets[i][1] - smoothedTargets[i][1]) * a;
+            smoothedTargets[i][2] += (newTargets[i][2] - smoothedTargets[i][2]) * a;
+        }
+    }
+
     function updatePoints() {
       if (points) {
         scene.remove(points);
@@ -232,7 +249,7 @@
     }
 
     function updatePositions() {
-      if (!points || words.length === 0) return;
+      if (!points || words.length === 0 || targetPositions.length === 0) return;
 
       const positions = points.geometry.attributes.position.array;
       const lerpFactor = 0.12;
@@ -240,7 +257,7 @@
       for (let i = 0; i < words.length; i++) {
         // targetPositions is now evolving (server streams frames)
         for (let j = 0; j < 3; j++) {
-          currentPositions[i][j] += (targetPositions[i][j] - currentPositions[i][j]) * lerpFactor;
+          currentPositions[i][j] += ((smoothedTargets[i]?.[j] ?? targetPositions[i][j]) - currentPositions[i][j]) * lerpFactor;
           positions[i * 3 + j] = currentPositions[i][j];
         }
       }
@@ -355,12 +372,14 @@
         if (data.type === 'init') {
           words = data.words;
           targetPositions = data.positions;
+          applyServerTargets(targetPositions); // <-- ADD THIS
           currentPositions = data.positions.map(p => [...p]);
           velocities = data.positions.map(() => [0, 0, 0]);
           updatePoints();
         } else if (data.type === 'update') {
           words = data.words;
           targetPositions = data.positions;
+          applyServerTargets(targetPositions);
 
           while (currentPositions.length < words.length) {
             currentPositions.push([...targetPositions[currentPositions.length]]);
