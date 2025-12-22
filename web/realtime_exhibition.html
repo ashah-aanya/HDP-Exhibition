@@ -45,6 +45,8 @@
             focusPosition: [0, 0, 0], // Smoothly interpolated focus position
             cameraDistance: 15,      // Larger initial distance to use full landscape
             targetDistance: 15,      // Smooth camera movement
+            minDistance: 1,    // never zoom in closer than this
+            maxDistance: 8,   // ✅ never zoom out farther than this (prevents tiny clusters)
             lastFocusTime: 0,        // Track when we last changed focus
             focusTransitionDuration: 10000,  // ms between focus changes (10 seconds)
             forcedFocusIndex: null,        // when set, camera pans to this dot
@@ -500,7 +502,17 @@
             const maxDensity = currentPositions.length * 0.3;
 
             cameraState.targetDistance = 20 - (Math.min(density, maxDensity) / maxDensity) * 14;
+
+            // ✅ clamp zoom
+            cameraState.targetDistance = Math.max(cameraState.minDistance,
+                                    Math.min(cameraState.maxDistance, cameraState.targetDistance));
+
             cameraState.cameraDistance += (cameraState.targetDistance - cameraState.cameraDistance) * 0.02;
+
+            // ✅ also clamp the smoothed value (so it can't drift past bounds)
+            cameraState.cameraDistance = Math.max(cameraState.minDistance,
+                                    Math.min(cameraState.maxDistance, cameraState.cameraDistance));
+
 
             const orbitRadius = cameraState.cameraDistance;
             const t = now / 1000;
