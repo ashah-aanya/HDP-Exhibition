@@ -264,6 +264,7 @@ def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
         cluster_drift_step.labels = None
         cluster_drift_step.centers = None
         cluster_drift_step.cluster_offsets = None
+        cluster_drift_step.recluster_boost = 0  # NEW: trigger early recluster after "pressure release"
 
     cluster_drift_step.frame += 1
     positions = np.asarray(current_positions, dtype=np.float32)
@@ -275,7 +276,8 @@ def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
     # Recompute clusters occasionally (not every frame)
     if (cluster_drift_step.labels is None or
         cluster_drift_step.frame % cluster_update_every == 1 or
-        cluster_drift_step.labels.shape[0] != N):
+        cluster_drift_step.labels.shape[0] != N or
+        cluster_drift_step.recluster_boost > 0):  # NEW
 
         labels, centers = kmeans_simple(positions, k=k_eff, n_iter=6, seed=seed)
         cluster_drift_step.labels = labels
@@ -283,7 +285,11 @@ def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
 
         # init cluster offsets (the “breathe” direction per cluster)
         rng = np.random.default_rng(seed + cluster_drift_step.frame)
-        cluster_drift_step.cluster_offsets = rng.normal(0.0, cluster_drift_scale, size=centers.shape).astype(np.float32)
+        cluster_drift_step.cluster_offsets = rng.normal(
+            0.0, cluster_drift_scale, size=centers.shape
+        ).astype(np.float32)
+
+        cluster_drift_step.recluster_boost = max(0, cluster_drift_step.recluster_boost - 1)  # NEW
 
     labels = cluster_drift_step.labels
     centers = cluster_drift_step.centers
@@ -291,16 +297,44 @@ def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
 
     # Slowly change cluster offsets over time (smooth breathing)
     rng = np.random.default_rng(seed + cluster_drift_step.frame)
-    offsets = 0.98 * offsets + 0.02 * rng.normal(0.0, cluster_drift_scale, size=offsets.shape).astype(np.float32)
+    offsets = 0.98 * offsets + 0.02 * rng.normal(
+        0.0, cluster_drift_scale, size=offsets.shape
+    ).astype(np.float32)
     cluster_drift_step.cluster_offsets = offsets
 
     # Apply movement: each point follows its cluster offset + tiny wobble
     drift = offsets[labels]  # (N,D)
     wobble = rng.normal(0.0, point_wobble_scale, size=(N, D)).astype(np.float32)
-
     positions = positions + drift + wobble
 
-    # Gentle damping
+    # --- NEW: anti-collapse pressure when clusters get too tight ---
+    # Keeps contraction aesthetic, but prevents "dot" collapse by injecting outward pressure.
+    min_cluster_radius = 0.18   # tune in your display coords (try 0.12–0.30)
+    pressure_strength = 0.035   # outward push when too tight
+    pressure_noise = 0.010      # breaks perfect symmetry so it looks organic
+
+    for c in range(centers.shape[0]):
+        idx = np.where(labels == c)[0]
+        if idx.size < 3:
+            continue
+
+        v = positions[idx] - centers[c]                       # vectors from center
+        r = np.sqrt((v * v).sum(axis=1) + 1e-8)               # radii
+        r_mean = float(r.mean())
+
+        if r_mean < min_cluster_radius:
+            # Push outward: stronger the tighter it is (smoothly)
+            # scale in [0, 1] roughly
+            tightness = (min_cluster_radius - r_mean) / (min_cluster_radius + 1e-6)
+            dir_out = v / (r[:, None] + 1e-6)
+
+            positions[idx] += (pressure_strength * tightness) * dir_out
+            positions[idx] += rng.normal(0.0, pressure_noise, size=v.shape).astype(np.float32)
+
+            # Encourage re-clustering soon so labels adapt to the new shape
+            cluster_drift_step.recluster_boost = 2
+
+    # Keep your contraction (the vibe you like)
     positions *= damping
 
     return positions
