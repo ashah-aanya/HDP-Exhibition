@@ -83,7 +83,6 @@ def initialize_tsne(initial_embeddings, perplexity=25, fast_mode=False):
         )
 
     embedding_obj = tsne.fit(initial_embeddings)
-    tsne_warmup_ticks = 30  # <-- ADD THIS (tweak: 20–60)
 
 
     # Get initial positions
