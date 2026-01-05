@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Words - Exhibition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            outline: none;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        input[type="text"]:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            display: block;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #dc3545;
+        }
+
+        .status-dot.connected {
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Add Word</h1>
+        <p class="subtitle">Enter a word to add to the visualization</p>
+
+        <div class="connection-status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="connectionText">Connecting...</span>
+        </div>
+
+        <div class="input-group">
+            <label for="wordInput">Word</label>
+            <input
+                type="text"
+                id="wordInput"
+                placeholder="Type a word and press Enter"
+                autocomplete="off"
+            >
+        </div>
+
+        <button id="addButton" disabled>Add Word</button>
+
+        <div class="status" id="statusMessage"></div>
+    </div>
+
+    <script>
+        let ws = null;
+
+        const wordInput = document.getElementById('wordInput');
+        const addButton = document.getElementById('addButton');
+        const statusMessage = document.getElementById('statusMessage');
+        const statusDot = document.getElementById('statusDot');
+        const connectionText = document.getElementById('connectionText');
+
+        function connectWebSocket() {
+            ws = new WebSocket('ws://localhost:8080/ws');
+
+            ws.onopen = () => {
+                console.log('Connected to server');
+                statusDot.classList.add('connected');
+                connectionText.textContent = 'Connected';
+                addButton.disabled = false;
+                wordInput.disabled = false;
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('Received:', data);
+
+                if (data.type === 'response') {
+                    if (data.success) {
+                        showStatus(data.message, 'success');
+                    } else {
+                        showStatus(data.message, 'error');
+                    }
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                showStatus('Connection error', 'error');
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected from server');
+                statusDot.classList.remove('connected');
+                connectionText.textContent = 'Disconnected - Reconnecting...';
+                addButton.disabled = true;
+                wordInput.disabled = true;
+
+                // Attempt to reconnect after 3 seconds
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+
+        function addWord() {
+            const word = wordInput.value.trim();
+
+            if (!word) {
+                showStatus('Please enter a word', 'error');
+                return;
+            }
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showStatus('Not connected to server', 'error');
+                return;
+            }
+
+            // Send to server
+            ws.send(JSON.stringify({
+                command: 'add_word_with_position',
+                word: word,
+                position: [0, 0, 0] // Server will compute actual position
+            }));
+
+            // Clear input
+            wordInput.value = '';
+            wordInput.focus();
+
+            // Show loading status
+            showStatus(`Adding "${word}"...`, 'info');
+        }
+
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status ${type}`;
+
+            // Auto-hide after 3 seconds
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 3000);
+        }
+
+        // Event listeners
+        addButton.addEventListener('click', addWord);
+
+        wordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addWord();
+            }
+        });
+
+        // Connect on load
+        connectWebSocket();
+
+        // Focus input on load
+        wordInput.focus();
+    </script>
+</body>
+</html>
