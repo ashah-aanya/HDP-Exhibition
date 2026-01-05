@@ -417,9 +417,12 @@
         function showNeighborLabels(neighborsForNewWords) {
             clearLabels();
 
+            console.log('showNeighborLabels called with:', neighborsForNewWords);
+
             neighborsForNewWords.forEach(entry => {
                 const newIdx = entry.newWordIndex;
                 const neighborIdxs = (entry.neighbors || []).slice(0, 8);
+                console.log(`New word index: ${newIdx}, word: ${words[newIdx]?.word}, neighbors:`, neighborIdxs);
 
                 // Track which word strings we've already labeled (case-insensitive)
                 const seen = new Set();
@@ -535,6 +538,7 @@
             requestAnimationFrame(animate);
 
             updatePositions();
+            updateLabelAnchors();  // Update label positions to follow dots
             updateDynamicCamera();
 
             renderer.render(scene, camera);

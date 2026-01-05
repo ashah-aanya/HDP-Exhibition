@@ -260,19 +260,18 @@ def kmeans_simple(X, k=8, n_iter=8, seed=42):
 
 def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
                        cluster_drift_scale=0.0005, point_wobble_scale=0.005,
-                       damping=0.998, seed=42, recluster_every=600):
+                       seed=42, recluster_every=600):
     """
     Move points by cluster-level drift + tiny per-point wobble.
-    Recomputes clusters every `cluster_update_every` frames to stay cheap.
+    Uses clusters as a loose guideline but never converges - perpetual gentle drift.
     """
     # keep state on the function
     if not hasattr(cluster_drift_step, "frame"):
         cluster_drift_step.frame = 0
         cluster_drift_step.labels = None
         cluster_drift_step.centers = None
-        cluster_drift_step.cluster_offsets = None
-        
-        cluster_drift_step.recluster_boost = 0  # NEW: trigger early recluster after "pressure release"
+        cluster_drift_step.cluster_velocities = None  # velocities instead of offsets
+        cluster_drift_step.point_velocities = None    # individual point velocities
 
     cluster_drift_step.frame += 1
     positions = np.asarray(current_positions, dtype=np.float32)
@@ -284,36 +283,51 @@ def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
     # Recompute clusters occasionally (not every frame)
     if (cluster_drift_step.labels is None or
         cluster_drift_step.frame % cluster_update_every == 1 or
-        cluster_drift_step.frame % recluster_every == 0 or   # NEW
+        cluster_drift_step.frame % recluster_every == 0 or
         cluster_drift_step.labels.shape[0] != N):
 
         labels, centers = kmeans_simple(positions, k=k_eff, n_iter=6, seed=seed)
         cluster_drift_step.labels = labels
         cluster_drift_step.centers = centers
 
-        # init cluster offsets (the “breathe” direction per cluster)
-        
+        # Initialize or resize velocities
         rng = np.random.default_rng(seed + cluster_drift_step.frame)
-        scale = cluster_drift_scale * (2.0 if (cluster_drift_step.frame % recluster_every == 0) else 1.0)
-        cluster_drift_step.cluster_offsets = rng.normal(0.0, scale, size=centers.shape).astype(np.float32)
+        if cluster_drift_step.cluster_velocities is None or cluster_drift_step.cluster_velocities.shape[0] != k_eff:
+            cluster_drift_step.cluster_velocities = rng.normal(0.0, cluster_drift_scale * 0.5, size=centers.shape).astype(np.float32)
+
+        if cluster_drift_step.point_velocities is None or cluster_drift_step.point_velocities.shape[0] != N:
+            cluster_drift_step.point_velocities = rng.normal(0.0, point_wobble_scale * 0.5, size=(N, D)).astype(np.float32)
 
     labels = cluster_drift_step.labels
     centers = cluster_drift_step.centers
-    
-    offsets = cluster_drift_step.cluster_offsets
 
-    # Slowly change cluster offsets over time (smooth breathing)
+    # Use random number generator
     rng = np.random.default_rng(seed + cluster_drift_step.frame)
-    offsets = 0.98 * offsets + 0.005 * rng.normal(0.0, cluster_drift_scale, size=offsets.shape).astype(np.float32)
-    cluster_drift_step.cluster_offsets = offsets
 
-    # Apply movement: each point follows its cluster offset + tiny wobble
-    drift = offsets[labels]  # (N,D)
-    wobble = rng.normal(0.0, point_wobble_scale, size=(N, D)).astype(np.float32)
-    positions = positions + drift + wobble
+    # Update cluster velocities with visible drift - slow convergence/divergence cycles
+    # Add continuous random forces that change direction slowly
+    cluster_noise = rng.normal(0.0, cluster_drift_scale * 1.5, size=cluster_drift_step.cluster_velocities.shape).astype(np.float32)
+    cluster_drift_step.cluster_velocities = (
+        0.96 * cluster_drift_step.cluster_velocities +  # very high momentum - slow, smooth direction changes
+        0.04 * cluster_noise                             # small random push
+    )
 
-    # Gentle damping
-    positions *= damping
+    # Update individual point velocities with visible wobble
+    point_noise = rng.normal(0.0, point_wobble_scale * 1.5, size=(N, D)).astype(np.float32)
+    cluster_drift_step.point_velocities = (
+        0.94 * cluster_drift_step.point_velocities +  # very high momentum - smooth motion
+        0.06 * point_noise                            # small random push
+    )
+
+    # Apply velocities instead of direct position changes
+    cluster_velocity = cluster_drift_step.cluster_velocities[labels]  # (N,D)
+    point_velocity = cluster_drift_step.point_velocities              # (N,D)
+
+    # Faster movement - long slow convergence/divergence cycles
+    positions = positions + 2.0 * cluster_velocity + 1.2 * point_velocity
+
+    # No damping - we want perpetual motion, not convergence
+    # positions *= damping  # REMOVED
 
     return positions
 
@@ -343,10 +357,9 @@ async def animation_loop():
                         positions = cluster_drift_step(
                             current_positions,
                             k=8,
-                            cluster_update_every=40,      # recompute clustering every ~2s at 10 FPS
-                            cluster_drift_scale=0.008,    # how much clusters drift
-                            point_wobble_scale=0.001,     # tiny individual wobble
-                            damping=0.995
+                            cluster_update_every=40,      # recompute clustering every ~4s at 10 FPS
+                            cluster_drift_scale=0.008,    # cluster drift
+                            point_wobble_scale=0.003      # individual wobble
                         )
                         current_positions = positions.tolist()
                         await broadcast_update()
