@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 model = None
 tsne = None
 embedding_obj = None
+base_embedding = None  # Keep reference to base embedding for transform()
 words = []
 word_colors = []  # Store colors for each word
 embeddings = []
@@ -48,7 +49,7 @@ async def init_model():
 
 def initialize_tsne(initial_embeddings, perplexity=25, fast_mode=False):
     """Initialize t-SNE with initial embeddings - increased scatter and fast learning"""
-    global tsne, embedding_obj, tsne_warmup_ticks
+    global tsne, embedding_obj, base_embedding, tsne_warmup_ticks
 
 
     # Perplexity must be less than n_samples
@@ -86,6 +87,7 @@ def initialize_tsne(initial_embeddings, perplexity=25, fast_mode=False):
         )
 
     embedding_obj = tsne.fit(initial_embeddings)
+    base_embedding = embedding_obj  # Keep reference for transform()
 
     positions = embedding_obj[:].copy()
     global display_mean, display_scale
@@ -341,7 +343,8 @@ async def animation_loop():
     while is_animating:
         try:
             if len(words) >= 2 and embedding_obj is not None:
-                if len(embedding_obj) == len(words):
+                # Allow small mismatch during word addition (race condition)
+                if abs(len(embedding_obj) - len(words)) <= 1:
                     if tsne_warmup_ticks > 0:
                         # 🔥 Warmup phase: run real t-SNE for the first few ticks
                         embedding_obj = embedding_obj.optimize(n_iter=15, momentum=0.95)
@@ -364,25 +367,9 @@ async def animation_loop():
                         current_positions = positions.tolist()
                         await broadcast_update()
                 else:
-                    # New words were added - rebuild embedding_obj to include them
-                    logger.info(f"Rebuilding t-SNE embedding object to include {len(words) - len(embedding_obj)} new word(s)...")
-
-                    # Get all embeddings including new ones
-                    all_embeddings = np.array(embeddings)
-
-                    # Rebuild embedding for all points using prepare_partial
-                    embedding_obj = embedding_obj.prepare_partial(all_embeddings)
-
-                    # Update positions
-                    positions = embedding_obj[:].copy()
-                    positions = apply_display_transform(positions)
-                    current_positions = positions.tolist()
-
-                    # Reset warmup for brief settling period
-                    tsne_warmup_ticks = 2
-
-                    logger.info(f"✓ Embedding rebuilt! Now tracking {len(embedding_obj)} words. Returning to cluster drift mode...")
-                    await broadcast_update()
+                    # This shouldn't happen anymore since we update embedding_obj immediately
+                    # But just in case, log it and skip this frame
+                    logger.warning(f"Mismatch detected: {len(embedding_obj)} embeddings vs {len(words)} words. Skipping frame...")
 
             await asyncio.sleep(0.1)  # Update 10 times per second - more stable for large datasets
         except Exception as e:
@@ -494,11 +481,25 @@ async def websocket_handler(request):
                                 # Use t-SNE transform to add new word instantly
                                 logger.info(f"Transforming new word '{word}' using existing t-SNE...")
 
-                                new_pos = embedding_obj.transform(np.array([new_embedding]))
+                                # Use base_embedding for transform (it has the method)
+                                new_pos = base_embedding.transform(np.array([new_embedding]))
                                 new_pos = apply_display_transform(new_pos)
                                 current_positions.append(new_pos[0].tolist())
 
-                                logger.info(f"Word '{word}' added successfully. Total words: {len(words)}")
+                                # Update embedding_obj to include the new word
+                                all_embeddings = np.array(embeddings)
+                                embedding_obj = base_embedding.prepare_partial(all_embeddings)
+
+                                # Run a few optimization steps to let the new word settle
+                                logger.info(f"Running quick optimization to settle new word...")
+                                embedding_obj = embedding_obj.optimize(n_iter=20, momentum=0.8)
+
+                                # Update positions after optimization
+                                positions = embedding_obj[:].copy()
+                                positions = apply_display_transform(positions)
+                                current_positions = positions.tolist()
+
+                                logger.info(f"Word '{word}' added and optimized. Total: {len(words)} words")
 
                                 # Broadcast to all clients immediately (include neighbors payload)
                                 await broadcast_update(neighborsForNewWords=neighbors_payload)
