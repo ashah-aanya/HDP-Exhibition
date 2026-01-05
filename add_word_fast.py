@@ -91,6 +91,7 @@ def add_word_fast(word):
     # Place new word at centroid of nearest neighbors in t-SNE space
     nearest_positions = existing_positions[nearest_indices]
     new_position = nearest_positions.mean(axis=0, keepdims=True)
+    
 
     # Add small random offset to avoid exact overlap
     new_position += np.random.randn(1, 3) * 0.1

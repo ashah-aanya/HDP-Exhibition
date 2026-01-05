@@ -3,6 +3,7 @@ Real-time WebSocket server for evolving t-SNE visualization
 Supports adding new words dynamically and broadcasting updates
 """
 import os
+
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 os.environ['OMP_NUM_THREADS'] = '1'
 
@@ -32,6 +33,8 @@ websocket_clients = set()
 animation_task = None
 is_animating = False
 tsne_warmup_ticks = 2   # <-- ADD THIS (e.g., 30 ticks ≈ 3 seconds at 10 FPS)
+display_mean = None
+display_scale = None
 
 
 
@@ -84,21 +87,25 @@ def initialize_tsne(initial_embeddings, perplexity=25, fast_mode=False):
 
     embedding_obj = tsne.fit(initial_embeddings)
 
-
-    # Get initial positions
     positions = embedding_obj[:].copy()
-    positions = normalize_positions(positions)
+    global display_mean, display_scale
+    display_mean, display_scale = fit_display_transform(positions, target=5.0)
 
     logger.info("t-SNE initialized in high-drama mode!")
     return positions
 
-def normalize_positions(positions):
-    """Normalize positions to a consistent scale"""
-    positions = positions - positions.mean(axis=0)
-    max_range = np.abs(positions).max()
-    if max_range > 0:
-        positions = (positions / max_range) * 5
-    return positions
+def fit_display_transform(positions, target=5.0):
+    mean = positions.mean(axis=0)
+    shifted = positions - mean
+    max_range = np.abs(shifted).max()
+    scale = (target / max_range) if max_range > 0 else 1.0
+    return mean, scale
+
+def apply_display_transform(positions):
+    global display_mean, display_scale
+    if display_mean is None or display_scale is None:
+        return positions
+    return (positions - display_mean) * display_scale
 
 def topk_cosine_neighbors(embeddings_list, new_embedding, k=8):
     """
@@ -155,7 +162,7 @@ async def add_word(word, color="#151A1D"):
         # Transform new point using existing t-SNE
         try:
             new_position = embedding_obj.transform(np.array([new_embedding]))
-            new_position = normalize_positions(new_position)
+            new_position = apply_display_transform(new_position)
             current_positions.append(new_position[0].tolist())
         except Exception as e:
             logger.error(f"Error transforming new word: {e}")
@@ -183,7 +190,7 @@ async def optimize_tsne_step(iterations=50):
 
     # Get updated positions
     positions = embedding_obj[:].copy()
-    positions = normalize_positions(positions)
+    positions = apply_display_transform(positions)
     current_positions = positions.tolist()
 
     # Broadcast update
@@ -252,8 +259,8 @@ def kmeans_simple(X, k=8, n_iter=8, seed=42):
 
 
 def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
-                       cluster_drift_scale=0.03, point_wobble_scale=0.005,
-                       damping=0.995, seed=42):
+                       cluster_drift_scale=0.0005, point_wobble_scale=0.005,
+                       damping=0.998, seed=42, recluster_every=600):
     """
     Move points by cluster-level drift + tiny per-point wobble.
     Recomputes clusters every `cluster_update_every` frames to stay cheap.
@@ -264,6 +271,7 @@ def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
         cluster_drift_step.labels = None
         cluster_drift_step.centers = None
         cluster_drift_step.cluster_offsets = None
+        
         cluster_drift_step.recluster_boost = 0  # NEW: trigger early recluster after "pressure release"
 
     cluster_drift_step.frame += 1
@@ -276,30 +284,27 @@ def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
     # Recompute clusters occasionally (not every frame)
     if (cluster_drift_step.labels is None or
         cluster_drift_step.frame % cluster_update_every == 1 or
-        cluster_drift_step.labels.shape[0] != N or
-        cluster_drift_step.recluster_boost > 0):  # NEW
+        cluster_drift_step.frame % recluster_every == 0 or   # NEW
+        cluster_drift_step.labels.shape[0] != N):
 
         labels, centers = kmeans_simple(positions, k=k_eff, n_iter=6, seed=seed)
         cluster_drift_step.labels = labels
         cluster_drift_step.centers = centers
 
         # init cluster offsets (the “breathe” direction per cluster)
+        
         rng = np.random.default_rng(seed + cluster_drift_step.frame)
-        cluster_drift_step.cluster_offsets = rng.normal(
-            0.0, cluster_drift_scale, size=centers.shape
-        ).astype(np.float32)
-
-        cluster_drift_step.recluster_boost = max(0, cluster_drift_step.recluster_boost - 1)  # NEW
+        scale = cluster_drift_scale * (2.0 if (cluster_drift_step.frame % recluster_every == 0) else 1.0)
+        cluster_drift_step.cluster_offsets = rng.normal(0.0, scale, size=centers.shape).astype(np.float32)
 
     labels = cluster_drift_step.labels
     centers = cluster_drift_step.centers
+    
     offsets = cluster_drift_step.cluster_offsets
 
     # Slowly change cluster offsets over time (smooth breathing)
     rng = np.random.default_rng(seed + cluster_drift_step.frame)
-    offsets = 0.98 * offsets + 0.02 * rng.normal(
-        0.0, cluster_drift_scale, size=offsets.shape
-    ).astype(np.float32)
+    offsets = 0.98 * offsets + 0.005 * rng.normal(0.0, cluster_drift_scale, size=offsets.shape).astype(np.float32)
     cluster_drift_step.cluster_offsets = offsets
 
     # Apply movement: each point follows its cluster offset + tiny wobble
@@ -307,34 +312,7 @@ def cluster_drift_step(current_positions, k=8, cluster_update_every=20,
     wobble = rng.normal(0.0, point_wobble_scale, size=(N, D)).astype(np.float32)
     positions = positions + drift + wobble
 
-    # --- NEW: anti-collapse pressure when clusters get too tight ---
-    # Keeps contraction aesthetic, but prevents "dot" collapse by injecting outward pressure.
-    min_cluster_radius = 0.18   # tune in your display coords (try 0.12–0.30)
-    pressure_strength = 0.035   # outward push when too tight
-    pressure_noise = 0.010      # breaks perfect symmetry so it looks organic
-
-    for c in range(centers.shape[0]):
-        idx = np.where(labels == c)[0]
-        if idx.size < 3:
-            continue
-
-        v = positions[idx] - centers[c]                       # vectors from center
-        r = np.sqrt((v * v).sum(axis=1) + 1e-8)               # radii
-        r_mean = float(r.mean())
-
-        if r_mean < min_cluster_radius:
-            # Push outward: stronger the tighter it is (smoothly)
-            # scale in [0, 1] roughly
-            tightness = (min_cluster_radius - r_mean) / (min_cluster_radius + 1e-6)
-            dir_out = v / (r[:, None] + 1e-6)
-
-            positions[idx] += (pressure_strength * tightness) * dir_out
-            positions[idx] += rng.normal(0.0, pressure_noise, size=v.shape).astype(np.float32)
-
-            # Encourage re-clustering soon so labels adapt to the new shape
-            cluster_drift_step.recluster_boost = 2
-
-    # Keep your contraction (the vibe you like)
+    # Gentle damping
     positions *= damping
 
     return positions
@@ -356,7 +334,7 @@ async def animation_loop():
                         tsne_warmup_ticks -= 1
 
                         positions = embedding_obj[:].copy()
-                        positions = normalize_positions(positions)
+                        positions = apply_display_transform(positions)
                         current_positions = positions.tolist()
 
                         await broadcast_update()
@@ -370,28 +348,27 @@ async def animation_loop():
                             point_wobble_scale=0.001,     # tiny individual wobble
                             damping=0.995
                         )
-
-                        positions = normalize_positions(positions)
                         current_positions = positions.tolist()
                         await broadcast_update()
                 else:
-                    # New words were added - animate only the original words
-                    # Update just the original positions, keep new words at their initial positions
-                    num_original = len(embedding_obj)
+                    # New words were added - rebuild embedding_obj to include them
+                    logger.info(f"Rebuilding t-SNE embedding object to include {len(words) - len(embedding_obj)} new word(s)...")
 
-                    # Optimize the original embedding
-                    embedding_obj = embedding_obj.optimize(n_iter=15, momentum=0.95)
+                    # Get all embeddings including new ones
+                    all_embeddings = np.array(embeddings)
 
-                    # Get updated positions for original words
+                    # Rebuild embedding for all points using prepare_partial
+                    embedding_obj = embedding_obj.prepare_partial(all_embeddings)
+
+                    # Update positions
                     positions = embedding_obj[:].copy()
-                    positions = normalize_positions(positions)
+                    positions = apply_display_transform(positions)
+                    current_positions = positions.tolist()
 
-                    # Update only the original positions in current_positions
-                    for i in range(num_original):
-                        current_positions[i] = positions[i].tolist()
+                    # Reset warmup for brief settling period
+                    tsne_warmup_ticks = 2
 
-                    # New words (beyond num_original) keep their initial positions
-                    # Broadcast to all clients
+                    logger.info(f"✓ Embedding rebuilt! Now tracking {len(embedding_obj)} words. Returning to cluster drift mode...")
                     await broadcast_update()
 
             await asyncio.sleep(0.1)  # Update 10 times per second - more stable for large datasets
@@ -501,14 +478,12 @@ async def websocket_handler(request):
                                         "scores": neighbor_scores
                                     }]
 
-                                # Rebuild t-SNE with ALL embeddings (cached + new)
-                                # This uses the cached embeddings, so no recalculation of 4000+ words
-                                logger.info(f"Rebuilding t-SNE with {len(embeddings)} words (using cached embeddings)...")
-                                embeddings_array = np.array(embeddings)
+                                # Use t-SNE transform to add new word instantly
+                                logger.info(f"Transforming new word '{word}' using existing t-SNE...")
 
-                                # Use fast_mode=True for quick rebuild
-                                positions = initialize_tsne(embeddings_array, fast_mode=True)
-                                current_positions = positions.tolist()
+                                new_pos = embedding_obj.transform(np.array([new_embedding]))
+                                new_pos = apply_display_transform(new_pos)
+                                current_positions.append(new_pos[0].tolist())
 
                                 logger.info(f"Word '{word}' added successfully. Total words: {len(words)}")
 
@@ -569,12 +544,15 @@ async def load_existing_data():
 
             # Generate embeddings for existing words
             logger.info(f"Generating embeddings for {len(words)} words...")
-            embeddings_array = model.encode(words)
-            embeddings = embeddings_array.tolist()  # Keep as list for consistency
-
-            # Initialize t-SNE with existing data
-            # This updates the global embedding_obj
+            EMB_CACHE = Path("web/embeddings_cache.npy")
+            if EMB_CACHE.exists():
+                embeddings_array = np.load(EMB_CACHE)
+            else:
+                embeddings_array = model.encode(words, show_progress_bar=False)
+                np.save(EMB_CACHE, embeddings_array)
+            embeddings = embeddings_array.tolist()
             initialize_tsne(embeddings_array)
+
 
             # Use the positions from the saved file
             current_positions = data['frames'][-1]
