@@ -220,9 +220,9 @@
 
                 if (data.type === 'response') {
                     if (data.success) {
-                        showStatus(data.message, 'success');
+                        showStatus('Word added! Try another word.', 'success');
                     } else {
-                        showStatus(data.message, 'error');
+                        showStatus('Word already exists. Try a different word.', 'error');
                     }
                 }
             };
@@ -257,6 +257,9 @@
                 return;
             }
 
+            // Show loading status immediately
+            showStatus('Adding word...', 'info');
+
             // Send to server
             ws.send(JSON.stringify({
                 command: 'add_word_with_position',
@@ -267,17 +270,22 @@
             // Clear input
             wordInput.value = '';
             wordInput.focus();
-
-            // Show loading status
-            showStatus(`Adding "${word}"...`, 'info');
         }
 
+        let statusTimeout = null;
+
         function showStatus(message, type) {
+            // Clear any existing timeout
+            if (statusTimeout) {
+                clearTimeout(statusTimeout);
+            }
+
             statusMessage.textContent = message;
             statusMessage.className = `status ${type}`;
+            statusMessage.style.display = 'block';
 
             // Auto-hide after 3 seconds
-            setTimeout(() => {
+            statusTimeout = setTimeout(() => {
                 statusMessage.style.display = 'none';
             }, 3000);
         }
