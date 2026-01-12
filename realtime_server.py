@@ -461,7 +461,7 @@ async def websocket_handler(request):
                                 # Change previous orange words to blue
                                 for i in range(len(word_colors) - 1):
                                     if word_colors[i] == '#ff9800':
-                                        word_colors[i] = '#133A5B'
+                                        word_colors[i] = "#475E9D"
 
                                 # Generate embedding for the new word (ONLY new word, not all)
                                 new_embedding = model.encode([word])[0]

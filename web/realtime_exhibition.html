@@ -111,12 +111,12 @@
         // Add 3D coordinate axes
         function addAxes() {
             const axisLength = 2;
-            const axisRadius = 0.02;  // Thickness of the axis cylinders
+            const axisRadius = 0.013;  // Thickness of the axis cylinders
 
             const material = new THREE.MeshBasicMaterial({
                 color: 0xffffff,
                 transparent: true,
-                opacity: 0.75
+                opacity: 0.4
             });
 
             // X axis - White cylinder
@@ -333,7 +333,7 @@
             const ctx = canvas.getContext("2d");
 
             const fontSize = 36;
-            ctx.font = `${fontSize}px Arial`;
+            ctx.font = `${fontSize}px "Consolas", monospace`;
             const padding = 16;
             const textWidth = Math.ceil(ctx.measureText(text).width);
 
@@ -341,7 +341,7 @@
             canvas.height = fontSize + padding * 2;
 
             const ctx2 = canvas.getContext("2d");
-            ctx2.font = `${fontSize}px Arial`;
+            ctx2.font = `${fontSize}px "Consolas", monospace`;
             ctx2.fillStyle = "rgba(0,0,0,0.65)";
             ctx2.fillRect(0, 0, canvas.width, canvas.height);
             ctx2.fillStyle = color;
