@@ -139,10 +139,6 @@ async def add_word(word, color="#151A1D"):
     """Add a new word to the visualization"""
     global words, embeddings, current_positions, embedding_obj
 
-    if word.lower() in [w.lower() for w in words]:
-        logger.warning(f"Word '{word}' already exists")
-        return False
-
     # Generate embedding for new word
     logger.info(f"Adding word: {word}")
     new_embedding = model.encode([word])[0]
@@ -453,7 +449,7 @@ async def websocket_handler(request):
 
                             logger.info(f"Received add_word_with_position: word='{word}', position={position}")
 
-                            if word and word.lower() not in [w.lower() for w in words]:
+                            if word:
                                 # Add word
                                 words.append(word)
                                 word_colors.append('#ff9800')  # Orange for new word
@@ -510,11 +506,11 @@ async def websocket_handler(request):
                                     'message': f"Word '{word}' added"
                                 }))
                             else:
-                                logger.warning(f"Word '{word}' already exists or is invalid")
+                                logger.warning(f"Word '{word}' is invalid (empty)")
                                 await ws.send_str(json.dumps({
                                     'type': 'response',
                                     'success': False,
-                                    'message': f"Word '{word}' already exists or is invalid"
+                                    'message': f"Word is invalid (empty)"
                                 }))
                         except Exception as e:
                             logger.error(f"Error in add_word_with_position: {e}")
