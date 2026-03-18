@@ -706,12 +706,22 @@ if __name__ == '__main__':
     hostname = socket.gethostname()
     mdns_host = f"{hostname}.local"
 
+    # Get actual LAN IP
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        local_ip = "unavailable"
+
     logger.info("="*60)
     logger.info("Real-time t-SNE Visualization Server")
     logger.info("="*60)
-    logger.info(f"Display (Laptop A):  http://localhost:8080/")
-    logger.info(f"Visitor input (Laptop B):  http://{mdns_host}:8080/add")
-    logger.info(f"Health check:        http://{mdns_host}:8080/health")
+    logger.info(f"Display (Laptop A):        http://localhost:8080/")
+    logger.info(f"Visitor input (Laptop B):  http://{local_ip}:8080/add")
+    logger.info(f"Health check:              http://{local_ip}:8080/health")
+    logger.info(f"This machine's IP:         {local_ip}")
     logger.info("="*60)
 
     app = create_app()

@@ -17,3 +17,22 @@
 2026-03-14 10:42:30,271 INFO Auto-saved 3702 words
 2026-03-14 10:47:30,339 INFO Auto-saved 3702 words
 2026-03-14 10:50:52,753 INFO WebSocket connection closed. Total clients: 0
+2026-03-17 20:32:05,762 INFO ============================================================
+2026-03-17 20:32:05,762 INFO Real-time t-SNE Visualization Server
+2026-03-17 20:32:05,762 INFO ============================================================
+2026-03-17 20:32:05,762 INFO Display (Laptop A):        http://localhost:8080/
+2026-03-17 20:32:05,762 INFO Visitor input (Laptop B):  http://192.168.3.143:8080/add
+2026-03-17 20:32:05,762 INFO Health check:              http://192.168.3.143:8080/health
+2026-03-17 20:32:05,763 INFO This machine's IP:         192.168.3.143
+2026-03-17 20:32:05,763 INFO ============================================================
+2026-03-17 20:32:05,763 INFO Loading embedding model...
+2026-03-17 20:32:08,595 INFO Model loaded!
+2026-03-17 20:32:08,596 INFO Loading existing data...
+2026-03-17 20:32:08,599 INFO Generating embeddings for 3702 words...
+2026-03-17 20:32:08,622 INFO Initializing t-SNE with 3702 points (faster smooth mode)...
+2026-03-17 20:32:52,945 INFO t-SNE initialized in high-drama mode!
+2026-03-17 20:32:52,945 INFO Loaded 3702 existing words
+2026-03-17 20:33:35,114 INFO New WebSocket connection. Total clients: 1
+2026-03-17 20:33:35,168 INFO Animation loop started - ULTRA-FAST perpetual motion mode
+2026-03-17 20:34:12,913 INFO New WebSocket connection. Total clients: 2
+2026-03-17 20:34:18,623 INFO WebSocket connection closed. Total clients: 1
