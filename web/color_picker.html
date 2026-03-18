@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Picker - Exhibition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            font-family: "Consolas", monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .container {
+            background: rgba(0, 20, 40, 0.7);
+            border: none;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 28px;
+            font-weight: normal;
+            letter-spacing: 1px;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+            font-size: 13px;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 25px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #f44336;
+            flex-shrink: 0;
+        }
+
+        .status-dot.connected {
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .color-button {
+            aspect-ratio: 1;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .color-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .color-button:active {
+            transform: scale(1.05);
+        }
+
+        .custom-color {
+            margin-top: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: normal;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .color-input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="color"] {
+            width: 60px;
+            height: 50px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: none;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            outline: none;
+            font-family: "Consolas", monospace;
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+
+        button.apply {
+            padding: 12px 24px;
+            font-size: 14px;
+            border: none;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: "Consolas", monospace;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button.apply:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 12px 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            display: none;
+            border: none;
+        }
+
+        .status.success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #81c784;
+            display: block;
+        }
+
+        .status.error {
+            background: rgba(244, 67, 54, 0.2);
+            color: #e57373;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Change Dot Colors</h1>
+        <p class="subtitle">Pick a color to change all dots instantly</p>
+
+        <div class="connection-status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="connectionText">Connecting...</span>
+        </div>
+
+        <label>Preset Colors</label>
+        <div class="color-grid">
+            <button class="color-button" style="background: #ffffff" onclick="changeColor('#ffffff')"></button>
+            <button class="color-button" style="background: #00ffff" onclick="changeColor('#00ffff')"></button>
+            <button class="color-button" style="background: #ff00ff" onclick="changeColor('#ff00ff')"></button>
+            <button class="color-button" style="background: #ffff00" onclick="changeColor('#ffff00')"></button>
+            <button class="color-button" style="background: #ff0000" onclick="changeColor('#ff0000')"></button>
+            <button class="color-button" style="background: #00ff00" onclick="changeColor('#00ff00')"></button>
+            <button class="color-button" style="background: #0000ff" onclick="changeColor('#0000ff')"></button>
+            <button class="color-button" style="background: #ffa500" onclick="changeColor('#ffa500')"></button>
+            <button class="color-button" style="background: #ff1493" onclick="changeColor('#ff1493')"></button>
+            <button class="color-button" style="background: #7b68ee" onclick="changeColor('#7b68ee')"></button>
+            <button class="color-button" style="background: #40e0d0" onclick="changeColor('#40e0d0')"></button>
+            <button class="color-button" style="background: #32cd32" onclick="changeColor('#32cd32')"></button>
+        </div>
+
+        <div class="custom-color">
+            <label>Custom Color</label>
+            <div class="color-input-group">
+                <input type="color" id="colorPicker" value="#ffffff">
+                <input type="text" id="colorHex" value="#ffffff" placeholder="#ffffff">
+                <button class="apply" onclick="applyCustomColor()">Apply</button>
+            </div>
+        </div>
+
+        <div class="status" id="statusMessage"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        const statusDot = document.getElementById('statusDot');
+        const connectionText = document.getElementById('connectionText');
+        const statusMessage = document.getElementById('statusMessage');
+        const colorPicker = document.getElementById('colorPicker');
+        const colorHex = document.getElementById('colorHex');
+
+        // Sync color picker and hex input
+        colorPicker.addEventListener('input', (e) => {
+            colorHex.value = e.target.value;
+        });
+
+        colorHex.addEventListener('input', (e) => {
+            const color = e.target.value;
+            if (/^#[0-9A-F]{6}$/i.test(color)) {
+                colorPicker.value = color;
+            }
+        });
+
+        function connectWebSocket() {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+
+            ws.onopen = () => {
+                console.log('Connected to server');
+                statusDot.classList.add('connected');
+                connectionText.textContent = 'Connected';
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'response') {
+                    showStatus(data.message, 'success');
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                showStatus('Connection error', 'error');
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected from server');
+                statusDot.classList.remove('connected');
+                connectionText.textContent = 'Disconnected - Reconnecting...';
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+
+        function changeColor(color) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showStatus('Not connected to server', 'error');
+                return;
+            }
+
+            ws.send(JSON.stringify({
+                command: 'change_all_colors',
+                color: color
+            }));
+
+            colorPicker.value = color;
+            colorHex.value = color;
+        }
+
+        function applyCustomColor() {
+            const color = colorHex.value.trim();
+            if (!/^#[0-9A-F]{6}$/i.test(color)) {
+                showStatus('Invalid color format. Use #RRGGBB', 'error');
+                return;
+            }
+            changeColor(color);
+        }
+
+        let statusTimeout = null;
+
+        function showStatus(message, type) {
+            if (statusTimeout) {
+                clearTimeout(statusTimeout);
+            }
+
+            statusMessage.textContent = message;
+            statusMessage.className = `status ${type}`;
+            statusMessage.style.display = 'block';
+
+            statusTimeout = setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 3000);
+        }
+
+        // Connect on load
+        connectWebSocket();
+    </script>
+</body>
+</html>

@@ -18,8 +18,22 @@ from openTSNE import TSNE
 from openTSNE.affinity import PerplexityBasedNN
 import logging
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import logging.handlers
+
+def setup_logging():
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    logger.addHandler(ch)
+    fh = logging.handlers.RotatingFileHandler(
+        'exhibition.log', maxBytes=10*1024*1024, backupCount=5
+    )
+    fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    logger.addHandler(fh)
+    return logger
+
+logger = setup_logging()
 
 # Global state
 model = None
@@ -202,7 +216,7 @@ async def broadcast_update(neighborsForNewWords=None):
     # Build word data with colors from word_colors
     word_data = []
     for i, w in enumerate(words):
-        color = word_colors[i] if i < len(word_colors) else '#2196f3'
+        color = word_colors[i] if i < len(word_colors) else '#545487'
         word_data.append({'word': w, 'color': color})
 
     data = {
@@ -385,10 +399,20 @@ async def websocket_handler(request):
     websocket_clients.add(ws)
     logger.info(f"New WebSocket connection. Total clients: {len(websocket_clients)}")
 
+    # Keepalive pings every 30s to prevent NAT tables from killing idle connections
+    async def ping_client():
+        while not ws.closed:
+            await asyncio.sleep(30)
+            try:
+                await ws.ping()
+            except Exception:
+                break
+    asyncio.create_task(ping_client())
+
     # Send initial state with colors from word_colors
     word_data = []
     for i, w in enumerate(words):
-        color = word_colors[i] if i < len(word_colors) else '#2196f3'
+        color = word_colors[i] if i < len(word_colors) else '#545487'
         word_data.append({'word': w, 'color': color})
 
     initial_data = {
@@ -457,7 +481,7 @@ async def websocket_handler(request):
                                 # Change previous orange words to blue
                                 for i in range(len(word_colors) - 1):
                                     if word_colors[i] == '#ff9800':
-                                        word_colors[i] = "#475E9D"
+                                        word_colors[i] = "#545487"
 
                                 # Generate embedding for the new word (ONLY new word, not all)
                                 new_embedding = model.encode([word])[0]
@@ -597,10 +621,28 @@ async def watch_data_file():
                 logger.info("✓ Data reloaded and sent to all clients!")
 
 
+async def periodic_save():
+    """Auto-save words, colors, and embeddings every 5 minutes to prevent data loss on crash"""
+    while True:
+        await asyncio.sleep(300)
+        try:
+            save_data = {
+                'words': [{'word': w, 'color': c} for w, c in zip(words, word_colors)],
+                'frames': [current_positions]
+            }
+            with open('web/exhibition_data.json', 'w') as f:
+                json.dump(save_data, f)
+            np.save('web/embeddings_cache.npy', np.array(embeddings))
+            logger.info(f"Auto-saved {len(words)} words")
+        except Exception as e:
+            logger.error(f"Auto-save failed: {e}")
+
+
 async def start_background_tasks(app):
     """Initialize model and load data on startup"""
     await init_model()
     await load_existing_data()
+    asyncio.create_task(periodic_save())
 
     # File watcher disabled - using WebSocket messaging for updates instead
     # asyncio.create_task(watch_data_file())
@@ -615,11 +657,27 @@ async def cleanup_background_tasks(app):
         await animation_task
 
 
+async def health_handler(request):
+    return web.json_response({
+        'status': 'ok',
+        'words': len(words),
+        'clients': len(websocket_clients),
+        'animating': is_animating
+    })
+
+
 def create_app():
     """Create and configure the web application"""
     app = web.Application()
 
-    # Add routes
+    # Serve HTML files over HTTP so Laptop B can load them by URL
+    app.router.add_get('/', lambda r: web.FileResponse('web/realtime_exhibition.html'))
+    app.router.add_get('/add', lambda r: web.FileResponse('web/add_word.html'))
+    app.router.add_get('/color', lambda r: web.FileResponse('web/color_picker.html'))
+    app.router.add_get('/health', health_handler)
+    app.router.add_static('/web', path='web', name='web')
+
+    # Add WebSocket route
     app.router.add_get('/ws', websocket_handler)
 
     # Configure CORS
@@ -644,9 +702,17 @@ def create_app():
 
 
 if __name__ == '__main__':
+    import socket
+    hostname = socket.gethostname()
+    mdns_host = f"{hostname}.local"
+
     logger.info("="*60)
     logger.info("Real-time t-SNE Visualization Server")
     logger.info("="*60)
+    logger.info(f"Display (Laptop A):  http://localhost:8080/")
+    logger.info(f"Visitor input (Laptop B):  http://{mdns_host}:8080/add")
+    logger.info(f"Health check:        http://{mdns_host}:8080/health")
+    logger.info("="*60)
 
     app = create_app()
-    web.run_app(app, host='localhost', port=8080)
+    web.run_app(app, host='0.0.0.0', port=8080)
