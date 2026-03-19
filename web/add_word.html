@@ -12,7 +12,7 @@
         }
 
         body {
-            background: #000;
+            background: #0c0811;
             font-family: "Consolas", monospace;
             display: flex;
             justify-content: center;
@@ -23,7 +23,7 @@
         }
 
         .container {
-            background: rgba(0, 20, 40, 0.7);
+            background: rgba(33, 27, 54, 0.7);
             border: none;
             border-radius: 12px;
             padding: 40px;
@@ -188,7 +188,7 @@
 <body>
     <div class="container">
         <h1>Add Word</h1>
-        <p class="subtitle">Enter a word to add to the visualization</p>
+        <p class="subtitle">Share a word to add to the visualization</p>
 
         <div class="connection-status">
             <div class="status-dot" id="statusDot"></div>
@@ -219,8 +219,11 @@
         const statusDot = document.getElementById('statusDot');
         const connectionText = document.getElementById('connectionText');
 
+        let reconnectTimer = null;
+
         function connectWebSocket() {
-            ws = new WebSocket('ws://localhost:8080/ws');
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
 
             ws.onopen = () => {
                 console.log('Connected to server');
@@ -255,8 +258,13 @@
                 addButton.disabled = true;
                 wordInput.disabled = true;
 
-                // Attempt to reconnect after 3 seconds
-                setTimeout(connectWebSocket, 3000);
+                // Attempt to reconnect after 3 seconds (guard prevents timer stacking)
+                if (!reconnectTimer) {
+                    reconnectTimer = setTimeout(() => {
+                        reconnectTimer = null;
+                        connectWebSocket();
+                    }, 3000);
+                }
             };
         }
 
