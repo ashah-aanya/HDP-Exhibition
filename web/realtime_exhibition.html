@@ -367,50 +367,67 @@
             return sprite;
         }
 
-        function resolveLabelOverlaps(iterations = 10, minDist = 0.35) {
-            // Simple 3D repulsion between sprite positions
+        function resolveLabelOverlapsScreenSpace(iterations = 2) {
+            if (labelSprites.length < 2) return;
+
+            // Project all sprites to screen space
+            const proj = labelSprites.map(s => {
+                const v = s.position.clone().project(camera);
+                const sx = (v.x + 1) / 2 * window.innerWidth;
+                const sy = (-v.y + 1) / 2 * window.innerHeight;
+                const dist = Math.max(0.01, camera.position.distanceTo(s.position));
+                const fovPx = window.innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+                const sw = (s.scale.x / dist) * fovPx;
+                const sh = (s.scale.y / dist) * fovPx;
+                return { sx, sy, sw, sh };
+            });
+
             for (let it = 0; it < iterations; it++) {
                 for (let a = 0; a < labelSprites.length; a++) {
-                for (let b = a + 1; b < labelSprites.length; b++) {
-                    const A = labelSprites[a].position;
-                    const B = labelSprites[b].position;
+                    for (let b = a + 1; b < labelSprites.length; b++) {
+                        const A = proj[a], B = proj[b];
+                        const wordA = words[labelSprites[a].userData?.pointIndex]?.word;
+                        const wordB = words[labelSprites[b].userData?.pointIndex]?.word;
+                        if (wordA && wordB && wordA.toLowerCase() === wordB.toLowerCase()) continue;
 
-                    const dx = B.x - A.x;
-                    const dy = B.y - A.y;
-                    const dz = B.z - A.z;
+                        const overlapX = (A.sw + B.sw) / 2 - Math.abs(B.sx - A.sx);
+                        const overlapY = (A.sh + B.sh) / 2 - Math.abs(B.sy - A.sy);
+                        const minH = Math.min(A.sh, B.sh);
 
-                    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz) + 1e-6;
-                    if (dist < minDist) {
-                    const push = (minDist - dist) * 0.5;
-                    const ux = dx / dist, uy = dy / dist, uz = dz / dist;
-
-                    // Push mostly in Y so it feels like stacked labels
-                    A.y -= uy * push;
-                    B.y += uy * push;
-
-                    // Tiny X/Z push to avoid perfect columns
-                    A.x -= ux * push * 0.2;
-                    B.x += ux * push * 0.2;
-                    A.z -= uz * push * 0.2;
-                    B.z += uz * push * 0.2;
+                        // Only push if overlap exceeds 60% of the smaller label's height
+                        if (overlapX > 0 && overlapY > minH * 0.6) {
+                            const push = overlapY * 0.3;
+                            if (B.sy >= A.sy) { A.sy -= push; B.sy += push; }
+                            else               { A.sy += push; B.sy -= push; }
+                        }
                     }
                 }
-                }
+            }
+
+            // Unproject adjusted screen positions back to world space (keep original depth)
+            for (let i = 0; i < labelSprites.length; i++) {
+                const s = labelSprites[i];
+                const p = proj[i];
+                const ndcX = (p.sx / window.innerWidth) * 2 - 1;
+                const ndcY = -(p.sy / window.innerHeight) * 2 + 1;
+                const ndcZ = s.position.clone().project(camera).z;
+                s.position.copy(new THREE.Vector3(ndcX, ndcY, ndcZ).unproject(camera));
             }
         }
 
         function updateLabelAnchors() {
-            // Each sprite stores which point index it belongs to
+            // Reset each label to its anchor point first
             for (const s of labelSprites) {
                 const idx = s.userData?.pointIndex;
                 if (idx == null || !currentPositions[idx]) continue;
-
                 s.position.set(
-                currentPositions[idx][0],
-                currentPositions[idx][1] + (s.userData?.yOffset ?? 0.25),
-                currentPositions[idx][2]
+                    currentPositions[idx][0],
+                    currentPositions[idx][1] + (s.userData?.yOffset ?? 0.25),
+                    currentPositions[idx][2]
                 );
             }
+            // Then resolve overlaps in screen space every frame
+            resolveLabelOverlapsScreenSpace();
         }
 
 
@@ -421,7 +438,7 @@
 
             neighborsForNewWords.forEach(entry => {
                 const newIdx = entry.newWordIndex;
-                const neighborIdxs = (entry.neighbors || []).slice(0, 8);
+                const neighborIdxs = (entry.neighbors || []).slice(0, 7);
                 console.log(`New word index: ${newIdx}, word: ${words[newIdx]?.word}, neighbors:`, neighborIdxs);
 
                 // Track which word strings we've already labeled (case-insensitive)
@@ -459,9 +476,6 @@
                 // Neighbor labels (white), deduped
                 neighborIdxs.forEach(i => addLabel(i, "#ffffff", 0.25));
             });
-
-            // ✅ now that all are placed, reduce overlap
-            resolveLabelOverlaps(14, 0.45);
 
             if (labelTimeout) clearTimeout(labelTimeout);
             labelTimeout = setTimeout(() => clearLabels(), 10000);

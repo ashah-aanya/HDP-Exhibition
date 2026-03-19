@@ -490,7 +490,19 @@ async def websocket_handler(request):
                                 # Compute nearest neighbors in embedding space (for labeling)
                                 neighbors_payload = None
                                 if len(words) >= 3:
-                                    neighbor_idxs, neighbor_scores = topk_cosine_neighbors(embeddings, new_embedding, k=8)
+                                    # Fetch extra candidates to account for deduplication
+                                    raw_idxs, raw_scores = topk_cosine_neighbors(embeddings, new_embedding, k=20)
+                                    new_word_lower = word.lower()
+                                    seen_words = {new_word_lower}
+                                    neighbor_idxs, neighbor_scores = [], []
+                                    for idx, score in zip(raw_idxs, raw_scores):
+                                        w = words[idx].lower() if idx < len(words) else ""
+                                        if w and w not in seen_words:
+                                            seen_words.add(w)
+                                            neighbor_idxs.append(idx)
+                                            neighbor_scores.append(score)
+                                        if len(neighbor_idxs) == 7:
+                                            break
                                     new_idx = len(words) - 1
                                     neighbors_payload = [{
                                         "newWordIndex": new_idx,

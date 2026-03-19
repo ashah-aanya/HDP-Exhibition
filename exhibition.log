@@ -134,3 +134,90 @@
 2026-03-19 10:30:28,561 INFO WebSocket connection closed. Total clients: 1
 2026-03-19 10:30:28,562 INFO WebSocket connection closed. Total clients: 0
 2026-03-19 10:30:28,608 INFO Animation loop stopped
+2026-03-19 10:42:47,192 INFO ============================================================
+2026-03-19 10:42:47,193 INFO Real-time t-SNE Visualization Server
+2026-03-19 10:42:47,193 INFO ============================================================
+2026-03-19 10:42:47,193 INFO Display (Laptop A):        http://localhost:8080/
+2026-03-19 10:42:47,193 INFO Visitor input (Laptop B):  http://10.110.121.238:8080/add
+2026-03-19 10:42:47,193 INFO Health check:              http://10.110.121.238:8080/health
+2026-03-19 10:42:47,193 INFO This machine's IP:         10.110.121.238
+2026-03-19 10:42:47,193 INFO ============================================================
+2026-03-19 10:42:47,193 INFO Loading embedding model...
+2026-03-19 10:42:49,453 INFO Model loaded!
+2026-03-19 10:42:49,453 INFO Loading existing data...
+2026-03-19 10:42:49,457 INFO Generating embeddings for 3704 words...
+2026-03-19 10:42:49,484 INFO Initializing t-SNE with 3704 points (faster smooth mode)...
+2026-03-19 10:42:58,754 INFO t-SNE initialized in high-drama mode!
+2026-03-19 10:42:58,754 INFO Loaded 3704 existing words
+2026-03-19 10:43:00,552 INFO New WebSocket connection. Total clients: 1
+2026-03-19 10:43:03,916 INFO New WebSocket connection. Total clients: 2
+2026-03-19 10:43:03,936 INFO Animation loop started - ULTRA-FAST perpetual motion mode
+2026-03-19 10:43:40,637 INFO New WebSocket connection. Total clients: 3
+2026-03-19 10:43:47,257 INFO New WebSocket connection. Total clients: 4
+2026-03-19 10:47:02,687 INFO Received add_word_with_position: word='test', position=[0, 0, 0]
+2026-03-19 10:47:02,883 INFO Transforming new word 'test' using existing t-SNE...
+2026-03-19 10:47:04,784 INFO Running quick optimization to settle new word...
+2026-03-19 10:47:05,082 INFO Word 'test' added and optimized. Total: 3705 words
+2026-03-19 10:47:58,836 INFO Auto-saved 3705 words
+2026-03-19 10:52:58,888 INFO Auto-saved 3705 words
+2026-03-19 10:56:19,140 INFO Received add_word_with_position: word='test', position=[0, 0, 0]
+2026-03-19 10:56:19,199 INFO Transforming new word 'test' using existing t-SNE...
+2026-03-19 10:56:21,130 INFO Running quick optimization to settle new word...
+2026-03-19 10:56:21,428 INFO Word 'test' added and optimized. Total: 3706 words
+2026-03-19 10:56:23,614 INFO WebSocket connection closed. Total clients: 3
+2026-03-19 10:56:23,705 INFO New WebSocket connection. Total clients: 4
+2026-03-19 10:56:29,859 INFO WebSocket connection closed. Total clients: 3
+2026-03-19 10:56:29,860 INFO WebSocket connection closed. Total clients: 2
+2026-03-19 10:56:29,860 INFO WebSocket connection closed. Total clients: 1
+2026-03-19 10:56:29,860 INFO WebSocket connection closed. Total clients: 0
+2026-03-19 10:56:37,036 INFO ============================================================
+2026-03-19 10:56:37,036 INFO Real-time t-SNE Visualization Server
+2026-03-19 10:56:37,036 INFO ============================================================
+2026-03-19 10:56:37,036 INFO Display (Laptop A):        http://localhost:8080/
+2026-03-19 10:56:37,036 INFO Visitor input (Laptop B):  http://10.110.121.238:8080/add
+2026-03-19 10:56:37,036 INFO Health check:              http://10.110.121.238:8080/health
+2026-03-19 10:56:37,037 INFO This machine's IP:         10.110.121.238
+2026-03-19 10:56:37,037 INFO ============================================================
+2026-03-19 10:56:37,037 INFO Loading embedding model...
+2026-03-19 10:56:38,906 INFO Model loaded!
+2026-03-19 10:56:38,906 INFO Loading existing data...
+2026-03-19 10:56:38,909 INFO Generating embeddings for 3705 words...
+2026-03-19 10:56:38,932 INFO Initializing t-SNE with 3705 points (faster smooth mode)...
+2026-03-19 10:56:48,535 INFO t-SNE initialized in high-drama mode!
+2026-03-19 10:56:48,535 INFO Loaded 3705 existing words
+2026-03-19 10:56:48,563 INFO New WebSocket connection. Total clients: 1
+2026-03-19 10:56:49,220 INFO New WebSocket connection. Total clients: 2
+2026-03-19 10:56:49,271 INFO Animation loop started - ULTRA-FAST perpetual motion mode
+2026-03-19 10:56:49,550 INFO New WebSocket connection. Total clients: 3
+2026-03-19 10:56:54,653 INFO Received add_word_with_position: word='test', position=[0, 0, 0]
+2026-03-19 10:56:54,837 INFO Transforming new word 'test' using existing t-SNE...
+2026-03-19 10:56:56,743 INFO Running quick optimization to settle new word...
+2026-03-19 10:56:57,041 INFO Word 'test' added and optimized. Total: 3706 words
+2026-03-19 10:57:55,129 INFO WebSocket connection closed. Total clients: 2
+2026-03-19 10:57:55,283 INFO New WebSocket connection. Total clients: 3
+2026-03-19 10:58:03,145 INFO WebSocket connection closed. Total clients: 2
+2026-03-19 10:58:03,145 INFO WebSocket connection closed. Total clients: 1
+2026-03-19 10:58:03,145 INFO WebSocket connection closed. Total clients: 0
+2026-03-19 10:58:08,655 INFO ============================================================
+2026-03-19 10:58:08,655 INFO Real-time t-SNE Visualization Server
+2026-03-19 10:58:08,656 INFO ============================================================
+2026-03-19 10:58:08,656 INFO Display (Laptop A):        http://localhost:8080/
+2026-03-19 10:58:08,656 INFO Visitor input (Laptop B):  http://10.110.121.238:8080/add
+2026-03-19 10:58:08,656 INFO Health check:              http://10.110.121.238:8080/health
+2026-03-19 10:58:08,656 INFO This machine's IP:         10.110.121.238
+2026-03-19 10:58:08,656 INFO ============================================================
+2026-03-19 10:58:08,656 INFO Loading embedding model...
+2026-03-19 10:58:11,264 INFO Model loaded!
+2026-03-19 10:58:11,264 INFO Loading existing data...
+2026-03-19 10:58:11,268 INFO Generating embeddings for 3705 words...
+2026-03-19 10:58:11,292 INFO Initializing t-SNE with 3705 points (faster smooth mode)...
+2026-03-19 10:58:20,869 INFO t-SNE initialized in high-drama mode!
+2026-03-19 10:58:20,869 INFO Loaded 3705 existing words
+2026-03-19 10:58:21,892 INFO New WebSocket connection. Total clients: 1
+2026-03-19 10:58:22,360 INFO New WebSocket connection. Total clients: 2
+2026-03-19 10:58:22,411 INFO Animation loop started - ULTRA-FAST perpetual motion mode
+2026-03-19 10:58:24,386 INFO New WebSocket connection. Total clients: 3
+2026-03-19 10:58:26,083 INFO Received add_word_with_position: word='test', position=[0, 0, 0]
+2026-03-19 10:58:26,238 INFO Transforming new word 'test' using existing t-SNE...
+2026-03-19 10:58:28,144 INFO Running quick optimization to settle new word...
+2026-03-19 10:58:28,439 INFO Word 'test' added and optimized. Total: 3706 words
