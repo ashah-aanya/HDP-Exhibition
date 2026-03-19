@@ -58,14 +58,17 @@ pip install -r requirements.txt
 
 ### 2. Enable the WiFi hotspot
 
-1. Open **System Preferences > Sharing**
-2. Select **Internet Sharing** in the left list
-3. "Share your connection from:" → choose **Ethernet** (if plugged in) or **iPhone USB**
-4. "To computers using:" → check **Wi-Fi**
-5. Click **Wi-Fi Options…** and set a network name and password
-6. Check the **Internet Sharing** checkbox to turn it on
+**Requirement:** Laptop A must be connected to ethernet first. macOS cannot share a WiFi connection back out over WiFi (same adapter limitation) — the WiFi option will only appear in "To computers using" if you are sharing from ethernet.
 
-> Note: If you have no ethernet/USB connection to share from, use a phone hotspot instead — both laptops connect to the phone hotspot, and Laptop B reaches Laptop A via the `.local` hostname.
+1. Plug Laptop A into ethernet
+2. Open **System Preferences > Sharing**
+3. Select **Internet Sharing** in the left list
+4. "Share your connection from:" → choose **Ethernet**
+5. "To computers using:" → check **Wi-Fi**
+6. Click **Wi-Fi Options…** and set a network name and password
+7. Check the **Internet Sharing** checkbox to turn it on
+
+> No ethernet available? See **Networking Fallbacks** below.
 
 ---
 
@@ -90,7 +93,8 @@ Press `Cmd+Ctrl+F` to go fullscreen. The 3D visualization will start animating a
 
 **The script will print the URL for Laptop B**, e.g.:
 ```
-http://aanyas-macbook-pro.local:8080/add
+Visitor input (Laptop B):  http://192.168.2.1:8080/add
+This machine's IP:         192.168.2.1
 ```
 
 ---
@@ -103,12 +107,10 @@ Connect to Laptop A's WiFi hotspot network (the name you set in Internet Sharing
 ### Step 2 — Open the input page
 In any browser, go to:
 ```
-http://<laptop-a-hostname>.local:8080/add
+http://<laptop-a-ip>:8080/add
 ```
 
-The `.local` hostname is printed when you run `./start_exhibition.sh` on Laptop A. You can also find it by running `hostname` in Laptop A's terminal.
-
-**Example:** `http://aanyas-macbook-pro.local:8080/add`
+The IP address is printed in the terminal when you run `./start_exhibition.sh` on Laptop A. Use the IP directly — it's more reliable than the `.local` hostname on some networks.
 
 ### Step 3 — Verify
 The page should show a green **"Connected"** dot. Type a word and submit — it should appear on Laptop A's screen within ~2 seconds.
@@ -145,9 +147,10 @@ cd ~/HDP-Exhibition && ./start_exhibition.sh
 
 ### Laptop B can't connect / page won't load
 - Confirm Laptop B is on Laptop A's hotspot (not the venue WiFi)
-- Try the IP address instead: `http://192.168.2.1:8080/add` (or whatever IP `./start_exhibition.sh` printed)
-- Check `http://<hostname>.local:8080/health` from Laptop B — if this works but `/add` doesn't, try a different browser
+- Use the IP address printed by the server (e.g. `http://192.168.2.1:8080/add`), not the `.local` hostname
+- Check `http://<laptop-a-ip>:8080/health` from Laptop B — if this works but `/add` doesn't, try a different browser
 - Restart Laptop A's hotspot (turn Internet Sharing off and on in System Preferences)
+- No ethernet? See **Networking Fallbacks** below
 
 ### Green dot shows "Connecting..." but never connects
 - The server may still be loading (it takes 30–60 seconds on first startup to load the ML model and 5600+ word embeddings)
@@ -175,6 +178,35 @@ Then refresh the display page.
 
 ### After power cut or reboot
 Laptop A should auto-login and you just need to run `./start_exhibition.sh` again. All previously submitted words are preserved in `web/exhibition_data.json`.
+
+---
+
+## Networking Fallbacks
+
+If ethernet is unavailable, try these in order:
+
+**1. School/venue WiFi (try first)**
+Connect both laptops to the same WiFi. Use the IP printed by the server. Test with:
+```bash
+ping <laptop-a-ip>  # run from Laptop B
+```
+If it responds, it works. Some networks block this (client isolation) — if ping fails, move to the next option.
+
+**2. Windows hotspot from Laptop B**
+If Laptop B is Windows: Settings → Network → Mobile Hotspot → On.
+Laptop A joins that network, then open `http://<laptop-a-ip>:8080/add` on Laptop B.
+
+**3. macOS ad-hoc network from Laptop A (no internet needed)**
+1. Hold **Option** + click WiFi icon in menu bar → "Create Network..."
+2. Give it a name, click Create
+3. Laptop B joins that network
+4. Find Laptop A's IP: `ifconfig | grep "inet 169"`
+5. Open `http://169.254.x.x:8080/add` on Laptop B
+
+**4. Buy a USB-C ethernet adapter**
+~$15–25 at any electronics store. Plugs into Laptop A, enables the primary hotspot plan. Recommended to have on hand.
+
+> Full meeting setup plan: see `exhibition_setup_plan.md`
 
 ---
 

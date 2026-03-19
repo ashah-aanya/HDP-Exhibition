@@ -16,7 +16,7 @@ pkill -f realtime_server.py 2>/dev/null
 sleep 1
 
 # Get the stable .local mDNS hostname (works even if IP changes)
-MDNS_HOST="$(hostname).local"
+MDNS_HOST="$(hostname -s).local"
 
 # Also get the current hotspot/WiFi IP for reference
 HOTSPOT_IP=$(ipconfig getifaddr bridge100 2>/dev/null)
