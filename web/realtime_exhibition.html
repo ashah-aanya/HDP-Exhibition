@@ -46,7 +46,7 @@
             cameraDistance: 15,      // Larger initial distance to use full landscape
             targetDistance: 15,      // Smooth camera movement
             minDistance: 1,    // never zoom in closer than this
-            maxDistance: 8,   // ✅ never zoom out farther than this (prevents tiny clusters)
+            maxDistance: 5,   // ✅ never zoom out farther than this (prevents tiny clusters)
             lastFocusTime: 0,        // Track when we last changed focus
             focusTransitionDuration: 10000,  // ms between focus changes (10 seconds)
             forcedFocusIndex: null,        // when set, camera pans to this dot
@@ -535,7 +535,7 @@
             const t = now / 1000;
             const angle = (t * 0.02) % (Math.PI * 2);
 
-            camera.position.x = cameraState.focusPosition[0] + Math.cos(angle) * orbitRadius * 0.3;
+            camera.position.x = cameraState.focusPosition[0] + Math.cos(angle) * orbitRadius * 0.6;
             camera.position.y = cameraState.focusPosition[1] + Math.sin(angle) * (orbitRadius * 0.15);
             camera.position.z = cameraState.focusPosition[2] + Math.sin(angle) * orbitRadius * 0.3 + orbitRadius;
 

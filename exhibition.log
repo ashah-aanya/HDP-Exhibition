@@ -221,3 +221,18 @@
 2026-03-19 10:58:26,238 INFO Transforming new word 'test' using existing t-SNE...
 2026-03-19 10:58:28,144 INFO Running quick optimization to settle new word...
 2026-03-19 10:58:28,439 INFO Word 'test' added and optimized. Total: 3706 words
+2026-03-19 11:00:32,945 INFO WebSocket connection closed. Total clients: 2
+2026-03-19 11:00:32,947 INFO WebSocket connection closed. Total clients: 1
+2026-03-19 11:00:36,449 INFO New WebSocket connection. Total clients: 2
+2026-03-19 11:00:36,463 INFO New WebSocket connection. Total clients: 3
+2026-03-19 11:40:52,712 INFO WebSocket connection closed. Total clients: 2
+2026-03-19 11:40:52,713 ERROR Error sending to client: Connection lost
+2026-03-19 11:42:51,019 INFO Auto-saved 3706 words
+2026-03-19 11:47:51,094 INFO Auto-saved 3706 words
+2026-03-19 11:52:19,649 INFO WebSocket connection closed. Total clients: 1
+2026-03-19 11:52:19,649 INFO WebSocket connection closed. Total clients: 0
+2026-03-19 11:52:19,652 ERROR Error sending to client: Cannot write to closing transport
+2026-03-19 11:52:19,652 ERROR Error sending to client: Cannot write to closing transport
+2026-03-19 11:52:23,543 INFO New WebSocket connection. Total clients: 1
+2026-03-19 11:52:23,659 INFO New WebSocket connection. Total clients: 2
+2026-03-19 11:56:29,066 INFO Auto-saved 3706 words
