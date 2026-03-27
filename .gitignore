@@ -6,7 +6,7 @@ env/
 *.egg-info/
 
 # Data files
-data/raw/*.txt
+# data/raw/*.txt
 data/processed/*.pkl
 data/logs/
 
