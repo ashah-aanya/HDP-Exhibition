@@ -236,3 +236,107 @@
 2026-03-19 11:52:23,543 INFO New WebSocket connection. Total clients: 1
 2026-03-19 11:52:23,659 INFO New WebSocket connection. Total clients: 2
 2026-03-19 11:56:29,066 INFO Auto-saved 3706 words
+2026-04-04 16:06:33,666 INFO ============================================================
+2026-04-04 16:06:33,667 INFO Real-time t-SNE Visualization Server
+2026-04-04 16:06:33,667 INFO ============================================================
+2026-04-04 16:06:33,667 INFO Display (Laptop A):        http://localhost:8080/
+2026-04-04 16:06:33,667 INFO Visitor input (Laptop B):  http://192.168.5.46:8080/add
+2026-04-04 16:06:33,667 INFO Health check:              http://192.168.5.46:8080/health
+2026-04-04 16:06:33,667 INFO This machine's IP:         192.168.5.46
+2026-04-04 16:06:33,667 INFO ============================================================
+2026-04-04 16:06:33,668 INFO Loading embedding model...
+2026-04-04 16:06:37,126 INFO Model loaded!
+2026-04-04 16:06:37,126 INFO Loading existing data...
+2026-04-04 16:06:37,129 INFO Generating embeddings for 3706 words...
+2026-04-04 16:06:37,160 INFO Initializing t-SNE with 3706 points (faster smooth mode)...
+2026-04-04 16:06:47,562 INFO t-SNE initialized in high-drama mode!
+2026-04-04 16:06:47,562 INFO Loaded 3706 existing words
+2026-04-04 16:06:48,355 INFO New WebSocket connection. Total clients: 1
+2026-04-04 16:06:48,407 INFO Animation loop started - ULTRA-FAST perpetual motion mode
+2026-04-04 16:09:20,172 INFO New WebSocket connection. Total clients: 2
+2026-04-04 16:09:21,274 INFO WebSocket connection closed. Total clients: 1
+2026-04-04 16:09:21,427 INFO New WebSocket connection. Total clients: 2
+2026-04-04 16:09:22,585 INFO WebSocket connection closed. Total clients: 1
+2026-04-04 16:09:22,641 INFO New WebSocket connection. Total clients: 2
+2026-04-04 16:09:27,198 INFO WebSocket connection closed. Total clients: 1
+2026-04-04 16:09:27,198 INFO WebSocket connection closed. Total clients: 0
+2026-04-04 16:15:47,866 INFO ============================================================
+2026-04-04 16:15:47,866 INFO Real-time t-SNE Visualization Server
+2026-04-04 16:15:47,866 INFO ============================================================
+2026-04-04 16:15:47,866 INFO Display (Laptop A):        http://localhost:8080/
+2026-04-04 16:15:47,866 INFO Visitor input (Laptop B):  http://192.168.5.46:8080/add
+2026-04-04 16:15:47,866 INFO Health check:              http://192.168.5.46:8080/health
+2026-04-04 16:15:47,866 INFO This machine's IP:         192.168.5.46
+2026-04-04 16:15:47,866 INFO ============================================================
+2026-04-04 16:15:47,867 INFO Loading embedding model...
+2026-04-04 16:15:50,211 INFO Model loaded!
+2026-04-04 16:15:50,211 INFO Loading existing data...
+2026-04-04 16:15:50,215 INFO Generating embeddings for 3706 words...
+2026-04-04 16:15:50,239 INFO Initializing t-SNE with 3706 points (faster smooth mode)...
+2026-04-04 16:15:59,701 INFO t-SNE initialized in high-drama mode!
+2026-04-04 16:15:59,701 INFO Loaded 3706 existing words
+2026-04-04 16:16:06,262 INFO New WebSocket connection. Total clients: 1
+2026-04-04 16:16:08,270 INFO New WebSocket connection. Total clients: 2
+2026-04-04 16:16:08,320 INFO Animation loop started - ULTRA-FAST perpetual motion mode
+2026-04-04 16:16:11,843 INFO Received add_word_with_position: word='exhibition', position=[0, 0, 0]
+2026-04-04 16:16:12,094 INFO Transforming new word 'exhibition' using existing t-SNE...
+2026-04-04 16:16:13,978 INFO Running quick optimization to settle new word...
+2026-04-04 16:16:14,275 INFO Word 'exhibition' added and optimized. Total: 3707 words
+2026-04-04 16:16:34,080 INFO Received add_word_with_position: word='center', position=[0, 0, 0]
+2026-04-04 16:16:34,178 INFO Transforming new word 'center' using existing t-SNE...
+2026-04-04 16:16:36,054 INFO Running quick optimization to settle new word...
+2026-04-04 16:16:36,347 INFO Word 'center' added and optimized. Total: 3708 words
+2026-04-04 16:16:45,935 INFO Received add_word_with_position: word='edge', position=[0, 0, 0]
+2026-04-04 16:16:46,022 INFO Transforming new word 'edge' using existing t-SNE...
+2026-04-04 16:16:47,914 INFO Running quick optimization to settle new word...
+2026-04-04 16:16:48,214 INFO Word 'edge' added and optimized. Total: 3709 words
+2026-04-04 16:17:31,350 INFO WebSocket connection closed. Total clients: 1
+2026-04-04 16:17:31,351 INFO WebSocket connection closed. Total clients: 0
+2026-04-04 16:17:37,397 INFO ============================================================
+2026-04-04 16:17:37,397 INFO Real-time t-SNE Visualization Server
+2026-04-04 16:17:37,397 INFO ============================================================
+2026-04-04 16:17:37,397 INFO Display (Laptop A):        http://localhost:8080/
+2026-04-04 16:17:37,397 INFO Visitor input (Laptop B):  http://192.168.5.46:8080/add
+2026-04-04 16:17:37,397 INFO Health check:              http://192.168.5.46:8080/health
+2026-04-04 16:17:37,397 INFO This machine's IP:         192.168.5.46
+2026-04-04 16:17:37,397 INFO ============================================================
+2026-04-04 16:17:37,397 INFO Loading embedding model...
+2026-04-04 16:17:39,568 INFO Model loaded!
+2026-04-04 16:17:39,568 INFO Loading existing data...
+2026-04-04 16:17:39,571 INFO Generating embeddings for 3706 words...
+2026-04-04 16:17:39,597 INFO Initializing t-SNE with 3706 points (faster smooth mode)...
+2026-04-04 16:17:49,013 INFO t-SNE initialized in high-drama mode!
+2026-04-04 16:17:49,013 INFO Loaded 3706 existing words
+2026-04-04 16:17:50,184 INFO New WebSocket connection. Total clients: 1
+2026-04-04 16:17:50,224 INFO Animation loop started - ULTRA-FAST perpetual motion mode
+2026-04-04 16:17:51,184 INFO New WebSocket connection. Total clients: 2
+2026-04-04 16:19:01,059 INFO Received add_word_with_position: word='physics', position=[0, 0, 0]
+2026-04-04 16:19:01,223 INFO Transforming new word 'physics' using existing t-SNE...
+2026-04-04 16:19:03,125 INFO Running quick optimization to settle new word...
+2026-04-04 16:19:03,415 INFO Word 'physics' added and optimized. Total: 3707 words
+2026-04-04 16:19:11,128 INFO Received add_word_with_position: word='throw', position=[0, 0, 0]
+2026-04-04 16:19:11,246 INFO Transforming new word 'throw' using existing t-SNE...
+2026-04-04 16:19:13,108 INFO Running quick optimization to settle new word...
+2026-04-04 16:19:13,399 INFO Word 'throw' added and optimized. Total: 3708 words
+2026-04-04 16:19:20,666 INFO Received add_word_with_position: word='edge', position=[0, 0, 0]
+2026-04-04 16:19:20,757 INFO Transforming new word 'edge' using existing t-SNE...
+2026-04-04 16:19:22,627 INFO Running quick optimization to settle new word...
+2026-04-04 16:19:22,927 INFO Word 'edge' added and optimized. Total: 3709 words
+2026-04-04 16:19:32,064 INFO Received add_word_with_position: word='back', position=[0, 0, 0]
+2026-04-04 16:19:32,159 INFO Transforming new word 'back' using existing t-SNE...
+2026-04-04 16:19:34,021 INFO Running quick optimization to settle new word...
+2026-04-04 16:19:34,318 INFO Word 'back' added and optimized. Total: 3710 words
+2026-04-04 16:19:56,183 INFO Received add_word_with_position: word='losing', position=[0, 0, 0]
+2026-04-04 16:19:56,264 INFO Transforming new word 'losing' using existing t-SNE...
+2026-04-04 16:19:58,148 INFO Running quick optimization to settle new word...
+2026-04-04 16:19:58,443 INFO Word 'losing' added and optimized. Total: 3711 words
+2026-04-04 16:20:02,084 INFO Received add_word_with_position: word='edge', position=[0, 0, 0]
+2026-04-04 16:20:02,172 INFO Transforming new word 'edge' using existing t-SNE...
+2026-04-04 16:20:04,051 INFO Running quick optimization to settle new word...
+2026-04-04 16:20:04,350 INFO Word 'edge' added and optimized. Total: 3712 words
+2026-04-04 16:21:35,320 INFO Received add_word_with_position: word='top', position=[0, 0, 0]
+2026-04-04 16:21:35,435 INFO Transforming new word 'top' using existing t-SNE...
+2026-04-04 16:21:37,307 INFO Running quick optimization to settle new word...
+2026-04-04 16:21:37,602 INFO Word 'top' added and optimized. Total: 3713 words
+2026-04-04 16:21:46,120 INFO WebSocket connection closed. Total clients: 1
+2026-04-04 16:21:46,121 INFO WebSocket connection closed. Total clients: 0

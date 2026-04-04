@@ -52,7 +52,9 @@
             forcedFocusIndex: null,        // when set, camera pans to this dot
             forcedFocusUntil: 0,           // keep focus until this time
             forcedHoldDuration: 7000,      // ms to hold on new word (tweak)
-            snapTransitionDuration: 2500 
+            snapTransitionDuration: 2500,
+            forcedTargetDistance: null,    // when set, overrides density-based zoom during forced focus
+            transitionFromPosition: [0, 0, 0] // focusPosition at the moment forced focus began
         };
 
         // Initialize Three.js scene
@@ -98,14 +100,10 @@
             const now = Date.now();
             cameraState.forcedFocusIndex = idx;
             cameraState.forcedFocusUntil = now + cameraState.forcedHoldDuration;
-
-            // Start transition *from current focusPosition* toward the new target
             cameraState.lastFocusTime = now;
-            cameraState.focusTransitionDuration = cameraState.snapTransitionDuration;
 
-            // Make the current interpolation "start point" be whatever we're looking at now
-            cameraState.focusIndex = idx;         // treat as current target
-            cameraState.nextFocusIndex = idx;     // no wandering during snap
+            // Save wherever the camera is currently looking as the lerp start point
+            cameraState.transitionFromPosition = [...cameraState.focusPosition];
         }
 
         // Add 3D coordinate axes
@@ -436,6 +434,31 @@
 
             console.log('showNeighborLabels called with:', neighborsForNewWords);
 
+            // Compute zoom distance to fit neighbors in view
+            let maxNeighborDist = 0;
+            neighborsForNewWords.forEach(entry => {
+                const newIdx = entry.newWordIndex;
+                if (!currentPositions[newIdx]) return;
+                const origin = currentPositions[newIdx];
+                (entry.neighbors || []).slice(0, 7).forEach(idx => {
+                    if (!currentPositions[idx]) return;
+                    const n = currentPositions[idx];
+                    const dx = n[0] - origin[0];
+                    const dy = n[1] - origin[1];
+                    const dz = n[2] - origin[2];
+                    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                    if (dist > maxNeighborDist) maxNeighborDist = dist;
+                });
+            });
+            if (maxNeighborDist > 0) {
+                // 2.5x the spread so labels aren't at the edge; clamp to avoid zooming too far out
+                const desired = maxNeighborDist * 2.5;
+                cameraState.forcedTargetDistance = Math.min(
+                    Math.max(desired, cameraState.minDistance),
+                    cameraState.maxDistance
+                );
+            }
+
             neighborsForNewWords.forEach(entry => {
                 const newIdx = entry.newWordIndex;
                 const neighborIdxs = (entry.neighbors || []).slice(0, 7);
@@ -490,35 +513,48 @@
             const forcing = (cameraState.forcedFocusIndex !== null && now < cameraState.forcedFocusUntil);
 
             if (forcing) {
-                cameraState.focusIndex = cameraState.forcedFocusIndex;
-                cameraState.nextFocusIndex = cameraState.forcedFocusIndex; // lock
-            } else {
-                // ✅ back to normal roaming behavior
-                cameraState.focusTransitionDuration = 10000; // restore default roam duration
+                // Lerp from where the camera was looking when forced focus began → new word position
+                const targetPoint = currentPositions[cameraState.forcedFocusIndex];
+                const elapsed = now - cameraState.lastFocusTime;
+                const snapProgress = Math.min(elapsed / cameraState.snapTransitionDuration, 1.0);
+                const easeProgress = 1 - Math.pow(1 - snapProgress, 3);
 
+                for (let i = 0; i < 3; i++) {
+                    cameraState.focusPosition[i] = cameraState.transitionFromPosition[i] +
+                        (targetPoint[i] - cameraState.transitionFromPosition[i]) * easeProgress;
+                }
+
+                cameraState.focusIndex = cameraState.forcedFocusIndex;
+                cameraState.nextFocusIndex = cameraState.forcedFocusIndex;
+            } else {
+                // Normal roaming: lerp between adjacent cluster points
                 if (now - cameraState.lastFocusTime > cameraState.focusTransitionDuration) {
-                cameraState.focusIndex = cameraState.nextFocusIndex;
-                cameraState.nextFocusIndex = findAdjacentCluster(cameraState.focusIndex);
-                cameraState.lastFocusTime = now;
+                    cameraState.focusIndex = cameraState.nextFocusIndex;
+                    cameraState.nextFocusIndex = findAdjacentCluster(cameraState.focusIndex);
+                    cameraState.lastFocusTime = now;
+                }
+
+                const currentFocusPoint = currentPositions[cameraState.focusIndex];
+                const nextFocusPoint = currentPositions[cameraState.nextFocusIndex];
+                const timeSinceFocus = now - cameraState.lastFocusTime;
+                const transitionProgress = Math.min(timeSinceFocus / cameraState.focusTransitionDuration, 1.0);
+                const easeProgress = 1 - Math.pow(1 - transitionProgress, 3);
+
+                for (let i = 0; i < 3; i++) {
+                    cameraState.focusPosition[i] =
+                        currentFocusPoint[i] + (nextFocusPoint[i] - currentFocusPoint[i]) * easeProgress;
                 }
             }
 
-            const currentFocusPoint = currentPositions[cameraState.focusIndex];
-            const nextFocusPoint = currentPositions[cameraState.nextFocusIndex];
+            if (forcing && cameraState.forcedTargetDistance !== null) {
+                // Zoom to show the new word's neighbors
+                cameraState.targetDistance = cameraState.forcedTargetDistance;
+            } else {
+                const density = calculateDensity(cameraState.focusIndex, 2.5);
+                const maxDensity = currentPositions.length * 0.3;
 
-            const timeSinceFocus = now - cameraState.lastFocusTime;
-            const transitionProgress = Math.min(timeSinceFocus / cameraState.focusTransitionDuration, 1.0);
-            const easeProgress = 1 - Math.pow(1 - transitionProgress, 3);
-
-            for (let i = 0; i < 3; i++) {
-                cameraState.focusPosition[i] =
-                currentFocusPoint[i] + (nextFocusPoint[i] - currentFocusPoint[i]) * easeProgress;
+                cameraState.targetDistance = 20 - (Math.min(density, maxDensity) / maxDensity) * 14;
             }
-
-            const density = calculateDensity(cameraState.focusIndex, 2.5);
-            const maxDensity = currentPositions.length * 0.3;
-
-            cameraState.targetDistance = 20 - (Math.min(density, maxDensity) / maxDensity) * 14;
 
             // ✅ clamp zoom
             cameraState.targetDistance = Math.max(cameraState.minDistance,
@@ -544,6 +580,7 @@
             // ✅ clear forced focus once time is up
             if (cameraState.forcedFocusIndex !== null && now >= cameraState.forcedFocusUntil) {
                 cameraState.forcedFocusIndex = null;
+                cameraState.forcedTargetDistance = null;
             }
         }
 
@@ -593,14 +630,14 @@
                     words = data.words;
                     targetPositions = data.positions;
 
-                    if (data.words.length > prevCount) {
-                        const newIdx = data.words.length - 1;
-                        focusCameraOnIndex(newIdx);
-                    }
-
                     while (currentPositions.length < words.length) {
                         currentPositions.push([...targetPositions[currentPositions.length]]);
                         velocities.push([0, 0, 0]);
+                    }
+
+                    if (data.words.length > prevCount) {
+                        const newIdx = data.words.length - 1;
+                        focusCameraOnIndex(newIdx);
                     }
 
                     // Only rebuild if new words were added (length change)
