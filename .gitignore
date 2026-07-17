@@ -22,3 +22,7 @@ data/logs/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# large precomputed embedding caches (regenerate with build_base.py)
+*.npy
+*.log
