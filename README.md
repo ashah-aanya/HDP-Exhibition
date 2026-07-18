@@ -2,8 +2,8 @@
 
 A real-time, interactive art installation that turns a machine's understanding of language into something a whole room can walk up to and add to. A visitor types a word, and it appears live inside a 3D map of meaning, floating among the words a language model considers most like it.
 
-<p align="center"><img src="docs/exhibition-wall.jpg" width="900" alt="The installation on a large LED wall: a 3D cloud of words with hello, soar, and evoking floating among glowing points"></p>
-<p align="center"><em>The piece running on a 34 by 15 foot wall. Words a room has typed in, arranged by a model's sense of what they mean.</em></p>
+<p align="center"><img src="docs/three-ways-of-seeing.png" width="900" alt="A frame from the exhibition: the word escapism in orange among its nearest neighbors in the 3D word cloud"></p>
+<p align="center"><em>A moment from the exhibition: the word "escapism" (orange) settling among its nearest neighbors in the cloud, on a 34 by 15 foot wall.</em></p>
 
 ## The idea
 
