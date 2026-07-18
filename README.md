@@ -17,14 +17,7 @@ Each word is encoded as an embedding and positioned within an evolving t-SNE clu
 
 ## How it works
 
-```
-Visitor's phone / laptop              Display screen
-   add_word.html          WiFi          realtime_exhibition.html
-   (type a word)         hotspot        (3D Three.js visualization)
-         |                                        ^
-         +------------->  Python server  ---------+
-                          embed + t-SNE + WebSocket broadcast
-```
+<p align="center"><img src="docs/how-it-works.png" width="940" alt="Flow diagram: a visitor types a word on add_word.html, the Python server embeds it with all-MiniLM-L6-v2, projects 384 dimensions to 3D with t-SNE, and broadcasts the positions over WebSocket to the Three.js word cloud on the display wall, all connected over a self-hosted WiFi hotspot with no internet"></p>
 
 - **Embeddings:** the `all-MiniLM-L6-v2` sentence-transformer turns each word into a 384 dimensional vector.
 - **Projection:** t-SNE reduces those vectors to 3D while preserving which words are neighbors.
