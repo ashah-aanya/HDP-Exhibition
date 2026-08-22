@@ -22,7 +22,7 @@ Each word is encoded as an embedding and positioned within an evolving t-SNE clu
 - **Embeddings:** the `all-MiniLM-L6-v2` sentence-transformer turns each word into a 384 dimensional vector.
 - **Projection:** t-SNE reduces those vectors to 3D while preserving which words are neighbors.
 - **Rendering:** Three.js draws the point cloud and word labels in WebGL.
-- **Live and local:** a Python WebSocket server broadcasts each new word to the display in real time, over a self-hosted WiFi hotspot, so the whole thing runs with no internet. Both pages auto-detect the server address, so there is nothing to configure on the day.
+- **Live and local:** a Python WebSocket server broadcasts each new word to the display in real time
 
 ## At the exhibition
 
