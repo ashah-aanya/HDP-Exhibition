@@ -1,4 +1,4 @@
-# Three Ways of Seeing
+# Finding Nearest Neighbors
 
 A real-time, interactive art installation that turns a machine's understanding of language into something a whole room can walk up to and add to. A visitor types a word, and it appears live inside a 3D map of meaning, floating among the words a language model considers most like it.
 
