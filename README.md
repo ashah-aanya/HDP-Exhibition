@@ -27,7 +27,6 @@ Each word is encoded as an embedding and positioned within an evolving t-SNE clu
 ## At the exhibition
 
 <p align="center"><img src="docs/exhibition-scale.jpg" width="820" alt="Two people standing in front of the wall-sized installation, showing its scale"></p>
-<p align="center"><em>Visitors add words from a phone; the display updates live over a self-hosted hotspot. The words in the cloud, including a few names, were typed in by the room.</em></p>
 
 ## Repo layout
 
